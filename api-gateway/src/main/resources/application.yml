@@ -1,0 +1,25 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: api-gateway
+
+ticketrush:
+  routes:
+    event-service: ${EVENT_SERVICE_URI:http://localhost:8081}
+    booking-service: ${BOOKING_SERVICE_URI:http://localhost:8082}
+    payment-service: ${PAYMENT_SERVICE_URI:http://localhost:8083}
+    ticket-service: ${TICKET_SERVICE_URI:http://localhost:8084}
+    waiting-room-service: ${WAITING_ROOM_SERVICE_URI:http://localhost:8086}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
