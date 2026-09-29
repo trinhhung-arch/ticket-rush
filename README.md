@@ -1,5 +1,7 @@
 # TicketRush
 
+[![CI](https://github.com/trinhhung-arch/ticket-rush/actions/workflows/ci.yml/badge.svg)](https://github.com/trinhhung-arch/ticket-rush/actions/workflows/ci.yml)
+
 Backend bán vé sự kiện dạng microservice, chịu được đợt mở bán đột biến mà **không bán trùng ghế**.
 Java 21 · Spring Boot 4 · Spring Cloud Gateway · Kafka · Redis · PostgreSQL · Testcontainers · Docker Compose.
 
