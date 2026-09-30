@@ -166,6 +166,31 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         assertThat(outboxTypesFor(bookingId)).containsExactly("CreatePayment", "BookingConfirmed");
     }
 
+    /** FR-BKG-06: cancelling frees the seat at once and stops the payment; a paid booking stays paid. */
+    @Test
+    void customerCanCancelAnUnpaidBookingButNotAPaidOne() {
+        UUID eventId = publishEventOnSale();
+        UUID unpaid = bookingService.create(booking("oanh", eventId, "VIP-A-03")).booking().id();
+
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "oanh")).hasStatusOk()
+                .bodyJson().hasPathSatisfying("$.cancelReason", reason -> reason.assertThat().isEqualTo("USER_CANCELLED"));
+        assertThat(outboxTypesFor(unpaid)).containsExactly("CreatePayment", "BookingCancelled", "CancelPayment");
+        await().atMost(WAIT).untilAsserted(() ->
+                assertThat(bookingService.create(booking("phuong", eventId, "VIP-A-03")).created()).isTrue());
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "oanh"))
+                .as("cancelling twice").hasStatusOk();
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "someone-else"))
+                .hasStatus(HttpStatus.NOT_FOUND);
+
+        UUID paid = bookingService.create(booking("quang", eventId, "VIP-B-01")).booking().id();
+        UUID paymentId = UUID.randomUUID();
+        paymentCreated(paid, paymentId);
+        paymentSucceeded(paid, paymentId);
+        await().atMost(WAIT).until(() -> statusOf(paid) == BookingStatus.CONFIRMED);
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", paid).header("X-User-Id", "quang"))
+                .hasStatus(HttpStatus.CONFLICT);
+    }
+
     @Test
     void customersSeeTheirOwnBookingsNewestFirst() {
         UUID eventId = publishEventOnSale();

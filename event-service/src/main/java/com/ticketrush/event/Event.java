@@ -59,6 +59,9 @@ public class Event {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(name = "waiting_room", nullable = false)
+    private boolean waitingRoom;
+
     @Version
     private Long version;
 
@@ -99,7 +102,7 @@ public class Event {
 
     EventPublished toPublishedMessage() {
         return new EventPublished(
-                EventPublished.CURRENT_VERSION, id, name, venue, city, startsAt, salesOpenAt, sectionSpecs());
+                EventPublished.CURRENT_VERSION, id, name, venue, city, startsAt, salesOpenAt, sectionSpecs(), waitingRoom);
     }
 
     private void apply(EventDetails details) {
@@ -108,6 +111,7 @@ public class Event {
         this.city = details.city();
         this.startsAt = details.startsAt();
         this.salesOpenAt = details.salesOpenAt();
+        this.waitingRoom = details.waitingRoom();
         replaceSections(details.sections());
     }
 
@@ -158,6 +162,10 @@ public class Event {
 
     public EventStatus status() {
         return status;
+    }
+
+    public boolean waitingRoom() {
+        return waitingRoom;
     }
 
     public boolean isDraft() {

@@ -23,7 +23,8 @@ record EventRequest(
         @NotBlank @Size(max = 100) String city,
         @NotNull @Future Instant startsAt,
         @NotNull Instant salesOpenAt,
-        @NotEmpty @Size(max = 20) List<@Valid SectionRequest> sections) {
+        @NotEmpty @Size(max = 20) List<@Valid SectionRequest> sections,
+        Boolean waitingRoom) {
 
     record SectionRequest(
             @NotBlank @Pattern(regexp = "[A-Z0-9]{1,8}", message = "must be 1-8 upper-case letters or digits") String code,
@@ -36,6 +37,7 @@ record EventRequest(
     EventDetails toDetails() {
         return new EventDetails(name, venue, city, startsAt, salesOpenAt, sections.stream()
                 .map(s -> new SectionSpec(s.code(), s.name(), s.rows(), s.seatsPerRow(), s.priceVnd()))
-                .toList());
+                .toList(),
+                Boolean.TRUE.equals(waitingRoom));
     }
 }

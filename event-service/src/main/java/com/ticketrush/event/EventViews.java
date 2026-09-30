@@ -22,11 +22,12 @@ final class EventViews {
             Instant salesOpenAt,
             EventStatus status,
             int totalSeats,
+            boolean waitingRoom,
             List<SectionView> sections) {
 
         static EventView of(Event event) {
             return new EventView(event.id(), event.organizerId(), event.name(), event.venue(), event.city(),
-                    event.startsAt(), event.salesOpenAt(), event.status(), event.totalSeats(),
+                    event.startsAt(), event.salesOpenAt(), event.status(), event.totalSeats(), event.waitingRoom(),
                     event.sectionSpecs().stream().map(SectionView::of).toList());
         }
     }

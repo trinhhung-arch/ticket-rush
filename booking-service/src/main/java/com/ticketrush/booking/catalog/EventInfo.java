@@ -40,6 +40,9 @@ public class EventInfo {
     @Column(name = "received_at", nullable = false)
     private Instant receivedAt;
 
+    @Column(name = "waiting_room", nullable = false)
+    private boolean waitingRoom;
+
     protected EventInfo() {
     }
 
@@ -53,6 +56,7 @@ public class EventInfo {
         info.salesOpenAt = event.salesOpenAt();
         info.totalSeats = SeatLayout.count(event.sections());
         info.receivedAt = now;
+        info.waitingRoom = event.waitingRoom();
         return info;
     }
 
@@ -62,6 +66,11 @@ public class EventInfo {
 
     public UUID id() {
         return id;
+    }
+
+    /** Buyers need an admission token from the waiting room (FR-WR-03). */
+    public boolean waitingRoom() {
+        return waitingRoom;
     }
 
     public String name() {

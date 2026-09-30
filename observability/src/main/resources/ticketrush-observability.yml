@@ -22,7 +22,8 @@ management:
       tasks.scheduled: false
   tracing:
     sampling:
-      probability: 1.0
+      # 100 % for development; lower it for load tests (TRACING_SAMPLING_PROBABILITY=0.01).
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
     export:
       otlp:
         enabled: ${OTEL_EXPORT_ENABLED:false}
