@@ -30,6 +30,10 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.NOT_FOUND, "Not found", detail);
     }
 
+    public static ApiException unprocessable(String detail) {
+        return new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "Unprocessable request", detail);
+    }
+
     public static ApiException conflict(String detail) {
         return new ApiException(HttpStatus.CONFLICT, "Conflict", detail);
     }

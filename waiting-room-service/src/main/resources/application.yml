@@ -4,10 +4,21 @@ server:
 
 spring:
   config:
-    import: classpath:ticketrush-observability.yml
+    import: classpath:ticketrush-observability.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: waiting-room-service
   threads:
     virtual:
       enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16379}
 
+ticketrush:
+  waiting-room:
+    capacity: ${WAITING_ROOM_CAPACITY:2000}
+    admission-ttl: PT10M
+    admit-interval: PT1S
+    # Required, no default (NFR-SEC-03); shared with booking-service.
+    token-key: ${ADMISSION_TOKEN_KEY}

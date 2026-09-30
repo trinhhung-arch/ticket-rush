@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,11 +50,13 @@ public class BookingService {
     private final BookingProperties properties;
     private final OutboxWriter outbox;
     private final BookingMetrics metrics;
+    private final JdbcClient jdbc;
+    private final AdmissionTokens admissionTokens;
     private final TransactionTemplate transactionTemplate;
 
     BookingService(BookingRepository bookings, EventInfoRepository events, SeatInventory inventory,
                    SeatHoldStore holds, BookingProperties properties, OutboxWriter outbox, BookingMetrics metrics,
-                   PlatformTransactionManager transactionManager) {
+                   JdbcClient jdbc, AdmissionTokens admissionTokens, PlatformTransactionManager transactionManager) {
         this.bookings = bookings;
         this.events = events;
         this.inventory = inventory;
@@ -61,6 +64,8 @@ public class BookingService {
         this.properties = properties;
         this.outbox = outbox;
         this.metrics = metrics;
+        this.jdbc = jdbc;
+        this.admissionTokens = admissionTokens;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -77,6 +82,10 @@ public class BookingService {
         if (!event.isOnSale(now)) {
             throw ApiException.conflict("Sales for event %s are not open".formatted(event.id()))
                     .with("salesOpenAt", event.salesOpenAt());
+        }
+        if (event.waitingRoom() && !admissionTokens.admits(command.admissionToken(), command.userId(), event.id())) {
+            throw ApiException.forbidden("Event %s sells through the waiting room; join the queue first".formatted(event.id()))
+                    .with("joinQueue", "/api/queue/events/" + event.id() + "/join");
         }
         List<String> seatCodes = distinctSeatCodes(command.seatCodes());
         List<SeatRow> seats = inventory.findByCodes(event.id(), seatCodes);
@@ -102,6 +111,7 @@ public class BookingService {
                 now.plus(properties.holdDuration()), now);
         try {
             transactionTemplate.executeWithoutResult(status -> {
+                enforceTicketLimit(command.userId(), event.id(), seatCodes.size());
                 bookings.saveAndFlush(booking);
                 // First saga step: ask payment-service for a payment, atomically with the booking row.
                 outbox.append(Topics.PAYMENT_COMMANDS, bookingId.toString(), new CreatePayment(
@@ -130,6 +140,22 @@ public class BookingService {
                 .filter(booking -> booking.userId().equals(userId))
                 .map(BookingView::of)
                 .orElseThrow(() -> ApiException.notFound("Booking %s not found".formatted(id)));
+    }
+
+    /**
+     * FR-BKG-07. The advisory lock serialises one customer's requests for one event, so parallel
+     * requests cannot each see room for their seats and together go over the limit.
+     */
+    private void enforceTicketLimit(String userId, UUID eventId, int requested) {
+        jdbc.sql("select pg_advisory_xact_lock(hashtextextended(:key, 0))")
+                .param("key", "ticket-limit:" + userId + ":" + eventId)
+                .query().listOfRows();
+        long active = bookings.countActiveSeats(userId, eventId);
+        int limit = properties.maxTicketsPerCustomer();
+        if (active + requested > limit) {
+            throw ApiException.unprocessable("At most %d tickets per customer for this event; you already have %d"
+                    .formatted(limit, active)).with("limit", limit).with("current", active);
+        }
     }
 
     private Optional<Result> findReplay(CreateBooking command) {

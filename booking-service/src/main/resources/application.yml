@@ -14,6 +14,8 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:15432}/${DB_NAME:booking_db}
     username: ${DB_USER:booking_svc}
     password: ${DB_PASSWORD:${BOOKING_DB_PASSWORD:}}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
   jpa:
     open-in-view: false
     hibernate:
@@ -32,6 +34,9 @@ spring:
     consumer:
       group-id: ${spring.application.name}
       auto-offset-reset: earliest
+    listener:
+      # One consumer thread per partition (topics have 12, see MessagingConfig).
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:12}
 
 
 ticketrush:
@@ -39,6 +44,7 @@ ticketrush:
     hold-duration: PT10M
     hold-grace: PT60S
     expiry-sweep-interval-ms: 5000
+    admission-token-key: ${ADMISSION_TOKEN_KEY:}
   outbox:
     relay:
       interval-ms: 200

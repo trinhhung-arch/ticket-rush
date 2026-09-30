@@ -36,6 +36,8 @@
         <zxing.version>3.5.4</zxing.version>
         <!-- Must match the OpenTelemetry SDK that Spring Boot manages (1.55.0 for Boot 4.0.x). -->
         <opentelemetry-instrumentation.version>2.21.0-alpha</opentelemetry-instrumentation.version>
+        <!-- Same version Spring Security 7.0 (oauth2-jose) uses, so phase 5 brings no conflict. -->
+        <nimbus-jose-jwt.version>10.4</nimbus-jose-jwt.version>
     </properties>
 
     <dependencyManagement>
@@ -54,6 +56,11 @@
                 <groupId>io.opentelemetry.instrumentation</groupId>
                 <artifactId>opentelemetry-logback-appender-1.0</artifactId>
                 <version>${opentelemetry-instrumentation.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.zxing</groupId>

@@ -5,8 +5,9 @@
 Backend bán vé sự kiện dạng microservice, chịu được đợt mở bán đột biến mà **không bán trùng ghế**.
 Java 21 · Spring Boot 4 · Spring Cloud Gateway · Kafka · Redis · PostgreSQL · Testcontainers · Docker Compose.
 
-> 1.000 request đồng thời cùng giữ một ghế: đúng 1 thành công, 999 nhận 409, xử lý xong trong khoảng 0,5 giây
-> (`BookingIntegrationTest`, máy dev 10 CPU).
+> Flash sale 1.000 request/giây trong 5 phút vào sự kiện 5.000 ghế: giữ ghế p95 **10 ms**, 0 lỗi, **0 ghế bán trùng**.
+> Xoá sạch Redis giữa đợt bán: vẫn 0 ghế bán trùng, 2.616/2.616 người trả tiền thừa được hoàn.
+> Chi tiết và những gì đo tải đã tìm ra: [báo cáo đo tải](docs/load-test-report.md).
 
 ## Kiến trúc
 
@@ -67,7 +68,7 @@ sequenceDiagram
 | 1. Nền tảng | Gateway, Event Service, giữ ghế, Outbox, Docker Compose | Xong |
 | 2. Saga và thanh toán | Saga đặt vé, Payment với cổng giả lập, hết hạn giữ ghế, hoàn tiền, vé QR, email | Xong |
 | 3. Quan sát | Trace xuyên Kafka và outbox (Jaeger), log theo trace (Loki), metric nghiệp vụ và cảnh báo (Prometheus, Grafana) | Xong |
-| 4. Chịu tải | Waiting room, rate limit, load test k6 | Chưa làm |
+| 4. Chịu tải | Waiting room, rate limit, khách tự huỷ, giới hạn 6 vé, đo tải k6 | Xong |
 | 5. Bảo mật và triển khai | Keycloak, Resilience4j, Helm, Kubernetes | Chưa làm |
 
 Mã yêu cầu (FR-…, NFR-…) trong code và test tham chiếu tới tài liệu FR/NFR của project.
@@ -88,7 +89,7 @@ Service chạy từ IDE cũng tự đọc `.env` ở thư mục gốc.
 
 Script đi trọn luồng qua Gateway: tạo và công bố sự kiện, giữ ghế, gửi lại cùng `Idempotency-Key`,
 thanh toán qua cổng giả lập, chờ booking CONFIRMED, lấy vé QR và kiểm tra email trong Mailpit;
-cuối cùng một khách bị từ chối thẻ và ghế được nhả lại.
+một khách bị từ chối thẻ và ghế được nhả lại; một sự kiện có waiting room; và một bot bị rate limit chặn.
 
 | Địa chỉ | Dùng để |
 |---|---|
@@ -100,6 +101,19 @@ cuối cùng một khách bị từ chối thẻ và ghế được nhả lại.
 | http://localhost:9090/alerts | Prometheus: 4 luật cảnh báo |
 
 Postgres (15432), Redis (16379) và Kafka (9094) cũng được mở ra máy host, ở cổng khác mặc định để không đụng database khác trên máy; chạy một service từ IDE là tự kết nối vào stack này. Nếu cổng 8080 đã bận, sinh `.env` bằng `GATEWAY_PORT=18080 ./scripts/init-dev-env.sh` và gọi `GATEWAY=http://localhost:18080 ./scripts/smoke-test.sh`.
+
+## Kết quả đo tải
+
+| Kịch bản | Mục tiêu | Kết quả |
+|---|---|---|
+| Giữ ghế ở 1.000 req/s trong 5 phút (NFR-PERF-01, 02) | p95 ≤ 200 ms, p99 ≤ 500 ms | p95 10 ms, p99 31 ms, 0 lỗi |
+| Không bán trùng (NFR-CORR-01) | 0 | 0 trên 5.000 ghế |
+| Xoá Redis giữa đợt bán (NFR-AVAIL-05) | 0 bán trùng | 0; 2.616 người trả tiền thừa được hoàn đủ |
+| Trả tiền tới CONFIRMED (NFR-PERF-04) | p95 ≤ 3 s | p95 0,35 s |
+| Danh sách sự kiện / sơ đồ 5.000 ghế (NFR-PERF-03) | p95 ≤ 150 / 300 ms | p95 6,3 / 10,8 ms |
+| 50.000 người vào waiting room trong 1 phút (NFR-PERF-05) | chịu được | p95 2,8 ms, đúng 2.000 người được vào |
+
+Đo trên một laptop 10 CPU, k6 và 17 container chạy chung máy. Lần đo đầu cho kết quả kém (p95 227 ms, saga 21 s). Năm chỗ nghẽn đã được tìm ra bằng metric và timestamp trong DB rồi sửa; xem [báo cáo](docs/load-test-report.md).
 
 ## Quan sát
 
@@ -136,13 +150,16 @@ Mọi lỗi trả về dạng `application/problem+json` (RFC 9457).
 | GET | `/api/events?city=&from=&to=&page=&size=` | event | FR-EVT-03: tối đa 50 mục một trang |
 | GET | `/api/events/{id}` | event | FR-EVT-04 |
 | GET | `/api/events/{id}/seats` | booking | FR-BKG-01: sơ đồ ghế AVAILABLE / HELD / SOLD |
-| POST | `/api/bookings` (header `Idempotency-Key`) | booking | FR-BKG-02, 03, 04: giữ 1–6 ghế trong 10 phút |
+| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | booking | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; rate limit 10 req/s mỗi người (FR-GW-02) |
+| POST | `/api/bookings/{id}/cancel` | booking | FR-BKG-06: khách tự huỷ booking chưa thanh toán |
 | GET | `/api/bookings` | booking | FR-BKG-08: booking của tôi, mới nhất trước, kèm lý do huỷ |
 | GET | `/api/bookings/{id}` | booking | Trạng thái và `checkoutUrl`; chỉ chủ booking xem được |
 | POST | `/api/payments/{id}/checkout` | payment | FR-PAY-02: cổng giả lập, body `{"outcome":"SUCCEEDED"}` hoặc `DECLINED` |
 | POST | `/api/payments/webhooks/mock-gateway` | payment | FR-PAY-03: webhook, gửi lặp vẫn an toàn |
 | GET | `/api/payments/{id}`, `/api/payments?bookingId=` | payment | Chỉ chủ thanh toán xem được |
 | GET | `/api/tickets?bookingId=` | ticket | FR-TKT-02: vé của tôi, `qrToken` để app vẽ mã QR |
+| POST | `/api/queue/events/{id}/join` | waiting-room | FR-WR-01: vào ngay nếu còn chỗ, không thì nhận vị trí; khi vào được thì có `admissionToken` |
+| GET | `/api/queue/events/{id}/status`, `/stream` (SSE) | waiting-room | FR-WR-02: vị trí và thời gian chờ ước tính, đẩy mỗi 2 giây |
 
 ## Test
 
@@ -171,6 +188,11 @@ Integration test chạy với Postgres, Kafka và Redis thật qua Testcontainer
 | `EventApiIntegrationTest.publishingAnnouncesTheEventOnKafkaExactlyOnce` | FR-EVT-02, Outbox |
 | `EventApiIntegrationTest.draftIsHiddenUntilPublishedAndThenLocked` | FR-EVT-02, FR-EVT-03 |
 | `ObservabilityIntegrationTest` | NFR-OBS-01: trace đi qua outbox vào Kafka; NFR-OBS-02: metric nghiệp vụ |
+| `BookingIntegrationTest.parallelRequestsFromOneCustomerCannotExceedTheLimit` | FR-BKG-07: 5 request song song, đúng 3 qua (6 vé) |
+| `BookingIntegrationTest.waitingRoomEventsRequireAnAdmissionTokenForThatBuyerAndEvent` | FR-WR-03: token sai người, sai sự kiện, hết hạn, sai khoá đều bị 403 |
+| `BookingSagaIntegrationTest.customerCanCancelAnUnpaidBookingButNotAPaidOne` | FR-BKG-06 |
+| `WaitingRoomIntegrationTest` | FR-WR-01, 02, 03: FIFO, SSE, JWT |
+| `RateLimitTest` | FR-GW-02, NFR-SEC-06 với Redis thật |
 | `RoutingTest` | FR-GW-01 |
 
 ## Cấu trúc
@@ -184,7 +206,8 @@ booking-service/        kho ghế, giữ ghế (src/main/resources/redis/*.lua),
 payment-service/        thanh toán, cổng giả lập, webhook, hoàn tiền
 ticket-service/         vé điện tử, token QR ký HMAC
 notification-service/   email vé kèm mã QR (zxing) qua SMTP
-waiting-room-service/   khung, làm ở giai đoạn 4
+waiting-room-service/   hàng đợi ảo trong Redis (Lua), vé vào cửa JWT, SSE
+load-test/              kịch bản k6: flash sale, waiting room, API đọc
 infra/postgres/         tạo database và role riêng cho từng service
 infra/otel-collector/   nhận OTLP, chuyển trace sang Jaeger, log sang Loki
 infra/prometheus/       scrape và luật cảnh báo
@@ -199,6 +222,7 @@ scripts/                smoke test end-to-end
 - [ADR 0002: Giữ ghế bằng Redis Lua, database là lớp chặn cuối](docs/adr/0002-seat-holds-in-redis-with-database-guard.md)
 - [ADR 0003: Transactional Outbox và consumer idempotent](docs/adr/0003-transactional-outbox-with-polling-publisher.md)
 - [ADR 0004: Quan sát bằng OpenTelemetry, trace đi xuyên qua outbox](docs/adr/0004-observability-with-opentelemetry.md)
+- [ADR 0005: Waiting room bằng Redis sorted set, vé vào cửa là JWT](docs/adr/0005-waiting-room-in-redis-with-jwt-admission.md)
 
 ## Tham khảo
 

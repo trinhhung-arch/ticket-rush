@@ -13,10 +13,13 @@ x-service: &service
 x-otel: &otel
   OTEL_EXPORT_ENABLED: "true"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
 
 services:
   postgres:
     image: postgres:17-alpine
+    # Five services with their own pools; booking alone uses up to 50 during a flash sale.
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
@@ -91,7 +94,16 @@ services:
       PAYMENT_SERVICE_URI: http://payment-service:8083
       TICKET_SERVICE_URI: http://ticket-service:8084
       WAITING_ROOM_SERVICE_URI: http://waiting-room-service:8086
-    depends_on: [event-service, booking-service, payment-service, ticket-service, waiting-room-service]
+      # Rate-limit buckets (FR-GW-02) are shared by every gateway instance through Redis.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis: { condition: service_healthy }
+      event-service: { condition: service_started }
+      booking-service: { condition: service_started }
+      payment-service: { condition: service_started }
+      ticket-service: { condition: service_started }
+      waiting-room-service: { condition: service_started }
 
   event-service:
     <<: *service
@@ -114,9 +126,12 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_PASSWORD: ${BOOKING_DB_PASSWORD:?}
+      # HTTP traffic and the saga's Kafka listeners share this pool; 20 starved the saga at 1,000 req/s.
+      DB_POOL_SIZE: 50
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ADMISSION_TOKEN_KEY: ${ADMISSION_TOKEN_KEY:?}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -167,11 +182,17 @@ services:
       kafka: { condition: service_healthy }
       mailpit: { condition: service_started }
 
-  # Phase 4 service: running skeleton for now.
   waiting-room-service:
     <<: *service
     build: { context: ., args: { MODULE: waiting-room-service } }
-    environment: *otel
+    environment:
+      <<: *otel
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ADMISSION_TOKEN_KEY: ${ADMISSION_TOKEN_KEY:?}
+      WAITING_ROOM_CAPACITY: ${WAITING_ROOM_CAPACITY:-2000}
+    depends_on:
+      redis: { condition: service_healthy }
 
   # --- Observability (phase 3) ---
   otel-collector:

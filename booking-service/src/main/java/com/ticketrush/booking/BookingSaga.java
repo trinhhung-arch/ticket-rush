@@ -2,6 +2,7 @@ package com.ticketrush.booking;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ import com.ticketrush.common.contract.PaymentEvents.PaymentSucceeded;
 import com.ticketrush.common.contract.SeatLine;
 import com.ticketrush.common.messaging.Topics;
 import com.ticketrush.common.outbox.OutboxWriter;
+import com.ticketrush.common.web.ApiException;
 
 /**
  * Orchestrates the booking saga (FR-BKG-09, ADR 0001). Every step locks the booking row first, so
@@ -59,9 +61,11 @@ public class BookingSaga {
     @Transactional
     public void onPaymentCreated(PaymentCreated event) {
         // A booking that expired before its payment was created stays cancelled; CancelPayment is already on its way.
-        bookings.findForUpdateById(event.bookingId())
-                .filter(booking -> booking.awaitPayment(event.paymentId(), event.checkoutUrl(), Instant.now()))
-                .ifPresent(booking -> log.info("Booking {} is awaiting payment {}", booking.id(), event.paymentId()));
+        int updated = bookings.markAwaitingPayment(event.bookingId(), event.paymentId(), event.checkoutUrl(), Instant.now(),
+                BookingStatus.PENDING, BookingStatus.AWAITING_PAYMENT);
+        if (updated == 1) {
+            log.info("Booking {} is awaiting payment {}", event.bookingId(), event.paymentId());
+        }
     }
 
     /** Confirms the booking, or refunds when it can no longer be honoured (FR-PAY-06, NFR-AVAIL-05). */
@@ -82,6 +86,26 @@ public class BookingSaga {
         bookings.findForUpdateById(event.bookingId())
                 .filter(Booking::isOpen)
                 .ifPresent(booking -> cancel(booking, reason, Instant.now()));
+    }
+
+    /**
+     * The customer gives up an unpaid booking (FR-BKG-06): the seats are free at once and the payment
+     * is stopped. Cancelling twice is fine; a paid booking cannot be cancelled here.
+     */
+    @Transactional
+    public BookingView cancelByCustomer(UUID bookingId, String userId) {
+        Booking booking = bookings.findForUpdateById(bookingId)
+                .filter(found -> found.userId().equals(userId))
+                .orElseThrow(() -> ApiException.notFound("Booking %s not found".formatted(bookingId)));
+        if (booking.status() == BookingStatus.CONFIRMED) {
+            throw ApiException.conflict("Booking %s is already paid".formatted(bookingId));
+        }
+        if (booking.isOpen()) {
+            cancel(booking, CancelReason.USER_CANCELLED, Instant.now());
+            outbox.append(Topics.PAYMENT_COMMANDS, booking.id().toString(),
+                    new CancelPayment(PaymentCommands.CURRENT_VERSION, booking.id(), CancelReason.USER_CANCELLED.name()));
+        }
+        return BookingView.of(booking);
     }
 
     /**

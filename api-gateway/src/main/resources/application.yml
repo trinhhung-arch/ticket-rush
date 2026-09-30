@@ -7,6 +7,10 @@ spring:
     import: classpath:ticketrush-observability.yml
   application:
     name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16379}
 
 ticketrush:
   routes:
@@ -15,4 +19,6 @@ ticketrush:
     payment-service: ${PAYMENT_SERVICE_URI:http://localhost:8083}
     ticket-service: ${TICKET_SERVICE_URI:http://localhost:8084}
     waiting-room-service: ${WAITING_ROOM_SERVICE_URI:http://localhost:8086}
-
+  rate-limit:
+    # FR-GW-02: 10 booking requests per second per user; the 11th within a second gets 429.
+    bookings-per-second: ${BOOKING_RATE_LIMIT:10}
