@@ -4,7 +4,11 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.mail.MessagingException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.MailSendException;
@@ -21,6 +25,8 @@ import com.ticketrush.common.contract.TicketEvents.TicketsIssued;
 @Service
 class TicketEmailSender {
 
+    private static final Logger log = LoggerFactory.getLogger(TicketEmailSender.class);
+
     static final String KIND = "TICKETS";
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter STARTS_AT = DateTimeFormatter.ofPattern("HH:mm, dd/MM/yyyy").withZone(ZONE);
@@ -29,11 +35,14 @@ class TicketEmailSender {
     private final JavaMailSender mailSender;
     private final SentEmailRepository sentEmails;
     private final NotificationProperties properties;
+    private final Counter sent;
 
-    TicketEmailSender(JavaMailSender mailSender, SentEmailRepository sentEmails, NotificationProperties properties) {
+    TicketEmailSender(JavaMailSender mailSender, SentEmailRepository sentEmails, NotificationProperties properties,
+                      MeterRegistry meters) {
         this.mailSender = mailSender;
         this.sentEmails = sentEmails;
         this.properties = properties;
+        this.sent = Counter.builder("ticketrush.emails.sent").tag("kind", KIND).description("Emails sent").register(meters);
     }
 
     /**
@@ -62,6 +71,8 @@ class TicketEmailSender {
             throw new MailSendException("Could not build the ticket email for booking " + tickets.bookingId(), e);
         }
         sentEmails.save(new SentEmail(tickets.bookingId(), KIND, tickets.email(), subject, Instant.now()));
+        sent.increment();
+        log.info("Sent {} tickets for booking {} by email", tickets.tickets().size(), tickets.bookingId());
     }
 
     private static String html(TicketsIssued tickets) {

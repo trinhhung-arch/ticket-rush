@@ -66,7 +66,7 @@ sequenceDiagram
 |---|---|---|
 | 1. Nền tảng | Gateway, Event Service, giữ ghế, Outbox, Docker Compose | Xong |
 | 2. Saga và thanh toán | Saga đặt vé, Payment với cổng giả lập, hết hạn giữ ghế, hoàn tiền, vé QR, email | Xong |
-| 3. Quan sát | OpenTelemetry, Prometheus, Grafana, Loki | Chưa làm |
+| 3. Quan sát | Trace xuyên Kafka và outbox (Jaeger), log theo trace (Loki), metric nghiệp vụ và cảnh báo (Prometheus, Grafana) | Xong |
 | 4. Chịu tải | Waiting room, rate limit, load test k6 | Chưa làm |
 | 5. Bảo mật và triển khai | Keycloak, Resilience4j, Helm, Kubernetes | Chưa làm |
 
@@ -95,8 +95,33 @@ cuối cùng một khách bị từ chối thẻ và ghế được nhả lại.
 | http://localhost:8080 | API Gateway, cổng vào duy nhất |
 | http://localhost:8090 | Kafka UI: xem topic `event.events` và các topic `-dlt` |
 | http://localhost:8025 | Mailpit: hộp thư test, xem email vé kèm mã QR |
+| http://localhost:3000 | Grafana: dashboard "TicketRush: tổng quan", không cần đăng nhập |
+| http://localhost:16686 | Jaeger: trace của từng request, xuyên qua Kafka |
+| http://localhost:9090/alerts | Prometheus: 4 luật cảnh báo |
 
 Postgres (15432), Redis (16379) và Kafka (9094) cũng được mở ra máy host, ở cổng khác mặc định để không đụng database khác trên máy; chạy một service từ IDE là tự kết nối vào stack này. Nếu cổng 8080 đã bận, sinh `.env` bằng `GATEWAY_PORT=18080 ./scripts/init-dev-env.sh` và gọi `GATEWAY=http://localhost:18080 ./scripts/smoke-test.sh`.
+
+## Quan sát
+
+Mỗi request có một trace đi qua mọi service, kể cả qua bảng outbox và Kafka ([ADR 0004](docs/adr/0004-observability-with-opentelemetry.md)).
+Trace thanh toán có 12 span:
+
+```
+api-gateway           http post
+payment-service       POST /api/payments/{id}/checkout
+payment-service       outbox publish PaymentSucceeded → payment.events send
+booking-service       payment.events process → outbox publish BookingConfirmed → booking.events send
+ticket-service        booking.events process → outbox publish TicketsIssued → ticket.events send
+notification-service  ticket.events process
+```
+
+- **Log:** mỗi dòng mang `trace_id`. Trong Grafana, mục Explore, chọn Loki và chạy
+  `{service_name=~".+"} |= "<bookingId>"` để thấy mọi bước của một booking; bấm vào `trace_id` để mở trace trong Jaeger.
+- **Dashboard** "TicketRush: tổng quan": giữ ghế mỗi giây, booking kết thúc theo lý do, thời gian từ lúc trả tiền tới
+  CONFIRMED (p95, vạch 3 s của NFR-PERF-04), thanh toán theo kết quả, request/lỗi/độ trễ theo service, độ trễ outbox, Kafka consumer lag.
+- **Cảnh báo** (`infra/prometheus/alerts.yml`): outbox chậm hơn 10 s, consumer tụt hơn 1.000 message, lỗi 5xx trên 1%, p95 xác nhận vượt 3 s.
+
+Chạy service từ IDE mà muốn gửi trace và log vào stack Compose thì đặt `OTEL_EXPORT_ENABLED=true`.
 
 ## API
 
@@ -145,11 +170,13 @@ Integration test chạy với Postgres, Kafka và Redis thật qua Testcontainer
 | `TicketEmailIntegrationTest` | FR-NTF-01, gửi thật qua Mailpit |
 | `EventApiIntegrationTest.publishingAnnouncesTheEventOnKafkaExactlyOnce` | FR-EVT-02, Outbox |
 | `EventApiIntegrationTest.draftIsHiddenUntilPublishedAndThenLocked` | FR-EVT-02, FR-EVT-03 |
+| `ObservabilityIntegrationTest` | NFR-OBS-01: trace đi qua outbox vào Kafka; NFR-OBS-02: metric nghiệp vụ |
 | `RoutingTest` | FR-GW-01 |
 
 ## Cấu trúc
 
 ```
+observability/          OpenTelemetry, Prometheus, Logback gửi OTLP, cấu hình quan sát dùng chung
 common/                 service chassis dùng chung: outbox, idempotent consumer, contract message, xử lý lỗi
 api-gateway/            định tuyến; sau này thêm JWT và rate limit
 event-service/          sự kiện, khu ghế, giờ mở bán
@@ -159,6 +186,9 @@ ticket-service/         vé điện tử, token QR ký HMAC
 notification-service/   email vé kèm mã QR (zxing) qua SMTP
 waiting-room-service/   khung, làm ở giai đoạn 4
 infra/postgres/         tạo database và role riêng cho từng service
+infra/otel-collector/   nhận OTLP, chuyển trace sang Jaeger, log sang Loki
+infra/prometheus/       scrape và luật cảnh báo
+infra/grafana/          datasource và dashboard nạp sẵn
 docs/adr/               các quyết định kiến trúc
 scripts/                smoke test end-to-end
 ```
@@ -168,6 +198,7 @@ scripts/                smoke test end-to-end
 - [ADR 0001: Saga đặt vé dạng điều phối](docs/adr/0001-orchestrated-booking-saga.md)
 - [ADR 0002: Giữ ghế bằng Redis Lua, database là lớp chặn cuối](docs/adr/0002-seat-holds-in-redis-with-database-guard.md)
 - [ADR 0003: Transactional Outbox và consumer idempotent](docs/adr/0003-transactional-outbox-with-polling-publisher.md)
+- [ADR 0004: Quan sát bằng OpenTelemetry, trace đi xuyên qua outbox](docs/adr/0004-observability-with-opentelemetry.md)
 
 ## Tham khảo
 

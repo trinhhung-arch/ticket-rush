@@ -11,6 +11,8 @@ import java.util.UUID;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
+import org.springframework.boot.micrometer.tracing.test.autoconfigure.AutoConfigureTracing;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
@@ -25,9 +27,14 @@ import com.ticketrush.common.contract.SectionSpec;
 import com.ticketrush.common.messaging.MessageHeaders;
 import com.ticketrush.common.messaging.Topics;
 
-/** Shared Spring context (one set of containers) and helpers for booking-service integration tests. */
+/**
+ * Shared Spring context (one set of containers) and helpers for booking-service integration tests.
+ * Tracing and metrics are on, as in production, so the observability tests share this context.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
+@AutoConfigureTracing
+@AutoConfigureMetrics
 @Import(TestcontainersConfiguration.class)
 abstract class BookingTestSupport {
 

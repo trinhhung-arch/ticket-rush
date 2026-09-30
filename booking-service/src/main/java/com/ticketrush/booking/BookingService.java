@@ -7,6 +7,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +36,8 @@ import com.ticketrush.common.web.ApiException;
 @Service
 public class BookingService {
 
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
+
     /** Result of {@link #create}; {@code created} is false when an idempotent retry returned an earlier booking. */
     public record Result(BookingView booking, boolean created) {
     }
@@ -44,10 +48,11 @@ public class BookingService {
     private final SeatHoldStore holds;
     private final BookingProperties properties;
     private final OutboxWriter outbox;
+    private final BookingMetrics metrics;
     private final TransactionTemplate transactionTemplate;
 
     BookingService(BookingRepository bookings, EventInfoRepository events, SeatInventory inventory,
-                   SeatHoldStore holds, BookingProperties properties, OutboxWriter outbox,
+                   SeatHoldStore holds, BookingProperties properties, OutboxWriter outbox, BookingMetrics metrics,
                    PlatformTransactionManager transactionManager) {
         this.bookings = bookings;
         this.events = events;
@@ -55,6 +60,7 @@ public class BookingService {
         this.holds = holds;
         this.properties = properties;
         this.outbox = outbox;
+        this.metrics = metrics;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -80,13 +86,16 @@ public class BookingService {
             throw ApiException.notFound("Seat %s does not exist".formatted(unknown)).with("seatCode", unknown);
         }
         seats.stream().filter(seat -> seat.status() == SeatStatus.SOLD).findFirst().ifPresent(sold -> {
+            metrics.seatConflict();
             throw seatTaken(sold.code());
         });
 
         UUID bookingId = UUID.randomUUID();
         holds.holdAll(event.id(), seatCodes, bookingId, properties.redisHoldTtl()).ifPresent(taken -> {
+            metrics.seatConflict();
             throw seatTaken(taken);
         });
+        metrics.seatsHeld();
 
         Booking booking = Booking.pending(bookingId, event.id(), command.userId(), command.email(), command.idempotencyKey(),
                 seats.stream().map(seat -> new BookingSeat(seat.code(), seat.priceVnd())).toList(),
@@ -98,6 +107,7 @@ public class BookingService {
                 outbox.append(Topics.PAYMENT_COMMANDS, bookingId.toString(), new CreatePayment(
                         PaymentCommands.CURRENT_VERSION, bookingId, command.userId(), booking.totalVnd(), booking.expiresAt()));
             });
+            log.info("Booking {} holds {} for user {}", bookingId, seatCodes, command.userId());
             return new Result(BookingView.of(booking), true);
         } catch (DataIntegrityViolationException e) {
             // Another request with the same Idempotency-Key won the insert; hand back its booking.

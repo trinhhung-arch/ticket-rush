@@ -3,6 +3,9 @@ package com.ticketrush.payment;
 import java.time.Instant;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,14 +28,18 @@ import com.ticketrush.common.web.ApiException;
 @Service
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
     private final PaymentRepository payments;
     private final OutboxWriter outbox;
     private final PaymentProperties properties;
+    private final MeterRegistry meters;
 
-    PaymentService(PaymentRepository payments, OutboxWriter outbox, PaymentProperties properties) {
+    PaymentService(PaymentRepository payments, OutboxWriter outbox, PaymentProperties properties, MeterRegistry meters) {
         this.payments = payments;
         this.outbox = outbox;
         this.properties = properties;
+        this.meters = meters;
     }
 
     /** FR-PAY-01: at most one payment per booking, however often the command arrives. */
@@ -43,6 +50,7 @@ public class PaymentService {
         }
         Payment payment = payments.save(Payment.open(
                 command.bookingId(), command.userId(), command.amountVnd(), command.expiresAt(), Instant.now()));
+        record(payment, "created");
         publish(payment, new PaymentCreated(PaymentEvents.CURRENT_VERSION, payment.id(), payment.bookingId(),
                 properties.checkoutUrl(payment.id()), payment.expiresAt()));
     }
@@ -52,7 +60,10 @@ public class PaymentService {
     public void cancel(CancelPayment command) {
         payments.findForUpdateByBookingId(command.bookingId())
                 .filter(Payment::isPending)
-                .ifPresent(payment -> payment.cancel(command.reason(), Instant.now()));
+                .ifPresent(payment -> {
+                    payment.cancel(command.reason(), Instant.now());
+                    record(payment, "cancelled");
+                });
         // A payment that already succeeded is left alone: the booking answers its PaymentSucceeded with a refund.
     }
 
@@ -63,6 +74,7 @@ public class PaymentService {
                 .filter(payment -> payment.status() == PaymentStatus.SUCCEEDED)
                 .ifPresent(payment -> {
                     payment.refund(command.reason(), Instant.now());
+                    record(payment, "refunded");
                     publish(payment, new PaymentRefunded(PaymentEvents.CURRENT_VERSION, payment.id(),
                             payment.bookingId(), payment.amountVnd(), command.reason()));
                 });
@@ -82,13 +94,16 @@ public class PaymentService {
         Instant now = Instant.now();
         if (payment.isExpiredAt(now)) {
             payment.expire(now);
+            record(payment, "expired");
             publish(payment, new PaymentFailed(PaymentEvents.CURRENT_VERSION, payment.id(), payment.bookingId(), "EXPIRED"));
         } else if (webhook.outcome() == GatewayWebhook.Outcome.SUCCEEDED) {
             payment.succeed(webhook.transactionId(), now);
+            record(payment, "succeeded");
             publish(payment, new PaymentSucceeded(PaymentEvents.CURRENT_VERSION, payment.id(), payment.bookingId(),
                     payment.amountVnd(), now));
         } else {
             payment.decline(webhook.transactionId(), now);
+            record(payment, "declined");
             publish(payment, new PaymentFailed(PaymentEvents.CURRENT_VERSION, payment.id(), payment.bookingId(), "DECLINED"));
         }
         return PaymentView.of(payment);
@@ -114,6 +129,11 @@ public class PaymentService {
     public PaymentView getForCheckout(UUID id) {
         return payments.findById(id).map(PaymentView::of)
                 .orElseThrow(() -> ApiException.notFound("Payment %s not found".formatted(id)));
+    }
+
+    private void record(Payment payment, String outcome) {
+        meters.counter("ticketrush.payments", "outcome", outcome).increment();
+        log.info("Payment {} for booking {} {}", payment.id(), payment.bookingId(), outcome);
     }
 
     private void publish(Payment payment, Object event) {

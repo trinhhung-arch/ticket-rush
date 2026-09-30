@@ -3,18 +3,11 @@ server:
   shutdown: graceful
 
 spring:
+  config:
+    import: classpath:ticketrush-observability.yml
   application:
     name: waiting-room-service
   threads:
     virtual:
       enabled: true
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      probes:
-        enabled: true

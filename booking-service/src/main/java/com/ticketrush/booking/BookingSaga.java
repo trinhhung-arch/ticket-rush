@@ -44,21 +44,24 @@ public class BookingSaga {
     private final SeatInventory inventory;
     private final SeatHoldStore holds;
     private final OutboxWriter outbox;
+    private final BookingMetrics metrics;
 
     BookingSaga(BookingRepository bookings, EventInfoRepository events, SeatInventory inventory, SeatHoldStore holds,
-                OutboxWriter outbox) {
+                OutboxWriter outbox, BookingMetrics metrics) {
         this.bookings = bookings;
         this.events = events;
         this.inventory = inventory;
         this.holds = holds;
         this.outbox = outbox;
+        this.metrics = metrics;
     }
 
     @Transactional
     public void onPaymentCreated(PaymentCreated event) {
         // A booking that expired before its payment was created stays cancelled; CancelPayment is already on its way.
         bookings.findForUpdateById(event.bookingId())
-                .ifPresent(booking -> booking.awaitPayment(event.paymentId(), event.checkoutUrl(), Instant.now()));
+                .filter(booking -> booking.awaitPayment(event.paymentId(), event.checkoutUrl(), Instant.now()))
+                .ifPresent(booking -> log.info("Booking {} is awaiting payment {}", booking.id(), event.paymentId()));
     }
 
     /** Confirms the booking, or refunds when it can no longer be honoured (FR-PAY-06, NFR-AVAIL-05). */
@@ -67,7 +70,7 @@ public class BookingSaga {
         Booking booking = bookings.findForUpdateById(event.bookingId())
                 .orElseThrow(() -> new IllegalStateException("Payment for unknown booking " + event.bookingId()));
         switch (booking.status()) {
-            case CONFIRMED -> log.debug("Booking {} is already confirmed", booking.id());
+            case CONFIRMED -> log.info("Booking {} is already confirmed; ignoring payment {}", booking.id(), event.paymentId());
             case CANCELLED -> refund(booking, "BOOKING_" + booking.cancelReason());
             case PENDING, AWAITING_PAYMENT -> confirmOrRefund(booking, event);
         }
@@ -114,6 +117,8 @@ public class BookingSaga {
         }
         inventory.markSold(booking.eventId(), seatCodes, booking.id());
         booking.confirm(payment.paymentId(), now);
+        metrics.confirmed(payment.paidAt());
+        log.info("Booking {} confirmed: seats {} sold", booking.id(), seatCodes);
 
         EventInfo event = events.findById(booking.eventId()).orElseThrow();
         outbox.append(Topics.BOOKING_EVENTS, booking.id().toString(), new BookingConfirmed(
@@ -126,6 +131,8 @@ public class BookingSaga {
 
     private void cancel(Booking booking, CancelReason reason, Instant now) {
         booking.cancel(reason, now);
+        metrics.cancelled(reason);
+        log.info("Booking {} cancelled: {}", booking.id(), reason);
         outbox.append(Topics.BOOKING_EVENTS, booking.id().toString(), new BookingCancelled(
                 BookingEvents.CURRENT_VERSION, booking.id(), booking.eventId(), booking.userId(), booking.email(),
                 reason.name()));
@@ -133,6 +140,7 @@ public class BookingSaga {
     }
 
     private void refund(Booking booking, String reason) {
+        log.info("Booking {} asks for a refund: {}", booking.id(), reason);
         outbox.append(Topics.PAYMENT_COMMANDS, booking.id().toString(),
                 new RefundPayment(PaymentCommands.CURRENT_VERSION, booking.id(), reason));
     }

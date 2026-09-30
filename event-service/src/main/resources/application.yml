@@ -4,7 +4,7 @@ server:
 
 spring:
   config:
-    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+    import: classpath:ticketrush-observability.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: event-service
   threads:
@@ -30,15 +30,6 @@ spring:
       pageable:
         max-page-size: 50
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      probes:
-        enabled: true
 
 ticketrush:
   outbox:
