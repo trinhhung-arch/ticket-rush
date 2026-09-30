@@ -22,6 +22,9 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, UUID> {
 
     long countByPublishedAtIsNull();
 
+    @Query("select min(m.createdAt) from OutboxMessage m where m.publishedAt is null")
+    Instant oldestUnpublishedCreatedAt();
+
     @Modifying
     @Query("delete from OutboxMessage m where m.publishedAt < :before")
     int deletePublishedBefore(Instant before);

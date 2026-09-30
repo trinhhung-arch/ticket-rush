@@ -34,16 +34,22 @@ public class OutboxMessage {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /** W3C traceparent of the transaction that wrote the message, so the trace continues through Kafka. */
+    @Column(name = "trace_parent")
+    private String traceParent;
+
     protected OutboxMessage() {
     }
 
-    OutboxMessage(String topic, String messageKey, String messageType, String payload, Instant createdAt) {
+    OutboxMessage(String topic, String messageKey, String messageType, String payload, Instant createdAt,
+                  String traceParent) {
         this.id = UUID.randomUUID();
         this.topic = topic;
         this.messageKey = messageKey;
         this.messageType = messageType;
         this.payload = payload;
         this.createdAt = createdAt;
+        this.traceParent = traceParent;
     }
 
     void markPublished(Instant at) {
@@ -76,5 +82,9 @@ public class OutboxMessage {
 
     public Instant getPublishedAt() {
         return publishedAt;
+    }
+
+    public String getTraceParent() {
+        return traceParent;
     }
 }

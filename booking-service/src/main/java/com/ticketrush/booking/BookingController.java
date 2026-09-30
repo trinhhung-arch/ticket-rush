@@ -9,6 +9,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.ticketrush.common.web.PageResponse;
 import com.ticketrush.common.web.RequestHeaders;
 
 @RestController
@@ -49,6 +52,13 @@ class BookingController {
             return ResponseEntity.ok(result.booking());
         }
         return ResponseEntity.created(uri.path("/api/bookings/{id}").build(result.booking().id())).body(result.booking());
+    }
+
+    /** The caller's bookings, newest first, with cancel reasons (FR-BKG-08). */
+    @GetMapping
+    PageResponse<BookingView> mine(@RequestHeader(RequestHeaders.USER_ID) String userId,
+                                   @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponse.of(bookings.listForUser(userId, pageable));
     }
 
     @GetMapping("/{id}")

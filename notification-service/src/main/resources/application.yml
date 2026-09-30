@@ -3,18 +3,29 @@ server:
   shutdown: graceful
 
 spring:
+  config:
+    import: classpath:ticketrush-observability.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: notification-service
   threads:
     virtual:
       enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:15432}/${DB_NAME:notify_db}
+    username: ${DB_USER:notify_svc}
+    password: ${DB_PASSWORD:${NOTIFY_DB_PASSWORD:}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      acks: all
+    consumer:
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      probes:
-        enabled: true
