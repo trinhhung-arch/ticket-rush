@@ -8,6 +8,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,10 @@ import com.ticketrush.booking.seat.SeatHoldStore;
 import com.ticketrush.booking.seat.SeatInventory;
 import com.ticketrush.booking.seat.SeatRow;
 import com.ticketrush.booking.seat.SeatStatus;
+import com.ticketrush.common.contract.PaymentCommands;
+import com.ticketrush.common.contract.PaymentCommands.CreatePayment;
+import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.common.outbox.OutboxWriter;
 import com.ticketrush.common.web.ApiException;
 
 /**
@@ -37,15 +43,18 @@ public class BookingService {
     private final SeatInventory inventory;
     private final SeatHoldStore holds;
     private final BookingProperties properties;
+    private final OutboxWriter outbox;
     private final TransactionTemplate transactionTemplate;
 
     BookingService(BookingRepository bookings, EventInfoRepository events, SeatInventory inventory,
-                   SeatHoldStore holds, BookingProperties properties, PlatformTransactionManager transactionManager) {
+                   SeatHoldStore holds, BookingProperties properties, OutboxWriter outbox,
+                   PlatformTransactionManager transactionManager) {
         this.bookings = bookings;
         this.events = events;
         this.inventory = inventory;
         this.holds = holds;
         this.properties = properties;
+        this.outbox = outbox;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -83,7 +92,12 @@ public class BookingService {
                 seats.stream().map(seat -> new BookingSeat(seat.code(), seat.priceVnd())).toList(),
                 now.plus(properties.holdDuration()), now);
         try {
-            transactionTemplate.executeWithoutResult(status -> bookings.saveAndFlush(booking));
+            transactionTemplate.executeWithoutResult(status -> {
+                bookings.saveAndFlush(booking);
+                // First saga step: ask payment-service for a payment, atomically with the booking row.
+                outbox.append(Topics.PAYMENT_COMMANDS, bookingId.toString(), new CreatePayment(
+                        PaymentCommands.CURRENT_VERSION, bookingId, command.userId(), booking.totalVnd(), booking.expiresAt()));
+            });
             return new Result(BookingView.of(booking), true);
         } catch (DataIntegrityViolationException e) {
             // Another request with the same Idempotency-Key won the insert; hand back its booking.
@@ -93,6 +107,11 @@ public class BookingService {
             holds.releaseAll(event.id(), seatCodes, bookingId);
             throw e;
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<BookingView> listForUser(String userId, Pageable pageable) {
+        return bookings.findByUserIdOrderByCreatedAtDesc(userId, pageable).map(BookingView::of);
     }
 
     @Transactional(readOnly = true)

@@ -55,6 +55,35 @@ public class SeatInventory {
                 .list();
     }
 
+    /**
+     * Locks the rows of the seats a booking is about to buy. Rows are always locked in seat order,
+     * so two confirmations that share seats cannot deadlock.
+     */
+    public List<SeatRow> lockForSale(UUID eventId, Collection<String> codes) {
+        return jdbc.sql("""
+                        select seat_code, section_code, price_vnd, status from seat_inventory
+                        where event_id = :eventId and seat_code in (:codes)
+                        order by seat_index
+                        for update
+                        """)
+                .param("eventId", eventId)
+                .param("codes", codes)
+                .query(SEAT_ROW)
+                .list();
+    }
+
+    /** The conditional update is the final guard: a seat that is already SOLD is never sold again. */
+    public int markSold(UUID eventId, Collection<String> codes, UUID bookingId) {
+        return jdbc.sql("""
+                        update seat_inventory set status = 'SOLD', booking_id = :bookingId
+                        where event_id = :eventId and seat_code in (:codes) and status = 'AVAILABLE'
+                        """)
+                .param("eventId", eventId)
+                .param("codes", codes)
+                .param("bookingId", bookingId)
+                .update();
+    }
+
     public List<SeatRow> findByCodes(UUID eventId, Collection<String> codes) {
         return jdbc.sql("""
                         select seat_code, section_code, price_vnd, status from seat_inventory

@@ -36,10 +36,10 @@ class EventCatalogListener {
     @Transactional
     public void onMessage(ConsumerRecord<String, String> record) {
         IncomingMessage message = IncomingMessage.from(record);
-        if (!message.type().equals(EventPublished.class.getSimpleName()) || !idempotentConsumer.firstDelivery(message)) {
+        if (!message.is(EventPublished.class) || !idempotentConsumer.firstDelivery(message)) {
             return;
         }
-        EventPublished event = jsonMapper.readValue(message.payload(), EventPublished.class);
+        EventPublished event = message.payloadAs(EventPublished.class, jsonMapper);
         // Flush now: the seat rows below go through plain JDBC and reference event_info by foreign key.
         events.saveAndFlush(EventInfo.from(event, Instant.now()));
         seats.addSeats(event.eventId(), SeatLayout.expand(event.sections()));

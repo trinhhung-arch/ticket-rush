@@ -64,6 +64,18 @@ public class EventInfo {
         return id;
     }
 
+    public String name() {
+        return name;
+    }
+
+    public String venue() {
+        return venue;
+    }
+
+    public Instant startsAt() {
+        return startsAt;
+    }
+
     public Instant salesOpenAt() {
         return salesOpenAt;
     }

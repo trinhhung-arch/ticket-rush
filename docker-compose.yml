@@ -1,4 +1,6 @@
-# Whole system on one machine: docker compose up --build
+# Whole system on one machine: ./scripts/init-dev-env.sh once, then docker compose up --build
+# Credentials come from the generated, git-ignored .env; none are written here (NFR-SEC-03).
+# "required variable ... is missing a value" means .env is missing: run ./scripts/init-dev-env.sh.
 # Only the gateway is published for API traffic (FR-GW-01). Infrastructure ports are published on
 # non-default host ports (Postgres 15432, Redis 16379, Kafka 9094) for debugging and for running a
 # service from the IDE against this stack without clashing with other local databases.
@@ -12,12 +14,12 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev}
-      EVENT_DB_PASSWORD: ${EVENT_DB_PASSWORD:-event_dev}
-      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_dev}
-      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_dev}
-      TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD:-ticket_dev}
-      NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:-notify_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      EVENT_DB_PASSWORD: ${EVENT_DB_PASSWORD:?}
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:?}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
+      TICKET_DB_PASSWORD: ${TICKET_DB_PASSWORD:?}
+      NOTIFY_DB_PASSWORD: ${NOTIFY_DB_PASSWORD:?}
     ports: ["15432:5432"]
     volumes:
       - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
@@ -91,7 +93,7 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_PASSWORD: ${EVENT_DB_PASSWORD:-event_dev}
+      DB_PASSWORD: ${EVENT_DB_PASSWORD:?}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       postgres: { condition: service_healthy }
@@ -103,7 +105,7 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_dev}
+      DB_PASSWORD: ${BOOKING_DB_PASSWORD:?}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -112,19 +114,49 @@ services:
       redis: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
-  # Phase 2 and 4 services: running skeletons for now.
   payment-service:
     <<: *service
     build: { context: ., args: { MODULE: payment-service } }
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Checkout links handed to customers point at the public gateway.
+      PUBLIC_BASE_URL: http://localhost:${GATEWAY_PORT:-8080}
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
 
   ticket-service:
     <<: *service
     build: { context: ., args: { MODULE: ticket-service } }
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_PASSWORD: ${TICKET_DB_PASSWORD:?}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      TICKET_SIGNING_KEY: ${TICKET_SIGNING_KEY:?}
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
 
   notification-service:
     <<: *service
     build: { context: ., args: { MODULE: notification-service } }
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_PASSWORD: ${NOTIFY_DB_PASSWORD:?}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      mailpit: { condition: service_started }
 
+  # Phase 4 service: running skeleton for now.
   waiting-room-service:
     <<: *service
     build: { context: ., args: { MODULE: waiting-room-service } }
