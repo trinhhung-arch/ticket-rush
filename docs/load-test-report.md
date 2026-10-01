@@ -84,6 +84,17 @@ Một lỗi nữa lộ ra ngoài diễn tập, khi máy thức dậy sau một �
   - Lock của logback được trao cho một virtual thread không còn carrier nào để chạy, nên toàn bộ service bị deadlock.
 - **Sửa:** consumer Kafka chạy trên platform thread; phần còn lại của service vẫn dùng virtual thread. `KafkaConsumerThreadsTest` kiểm tra điều này; trước khi sửa, test này đỏ vì một task giao cho executor của consumer chờ 5 s không có carrier.
 - **Hướng khác:** Java 24 trở lên (JEP 491) không còn pin virtual thread trong `synchronized`.
+- **Chạy lại diễn tập tắt Kafka sau khi sửa** (`./load-test/run-chaos.sh kafka`, cùng kịch bản):
+
+  | Chỉ số | Trước khi sửa | Sau khi sửa |
+  |---|---|---|
+  | Request giữ ghế lỗi | 0 / 12.001 | 0 / 12.001 |
+  | p99 giữ ghế | 102 ms | 215 ms |
+  | Request lỗi tổng | 1 / 88.361 | 1 / 85.285 |
+  | Booking CONFIRMED có đủ vé và email | 4.558 / 4.558 | 4.555 / 4.555 |
+  | Khớp sau khi Kafka bật lại | 169 s | 170 s |
+
+  Đối soát đủ 7 mục, 0 event mất. Lúc Kafka tắt, notification-service dùng khoảng 15% CPU. p99 giữ ghế cao hơn nhưng vẫn dưới ngưỡng 500 ms; một lần chạy chưa đủ để biết đó là dao động hay do thay đổi về thread.
 
 **Còn tồn tại: hiệu ứng "thundering herd" lúc Payment hồi phục.** Khoảng 2.600 người mua đã chờ 2 phút cùng thanh toán và thăm dò mỗi giây, đúng lúc saga xử lý dồn khoảng 5.000 event.
 - **Tác động:**
