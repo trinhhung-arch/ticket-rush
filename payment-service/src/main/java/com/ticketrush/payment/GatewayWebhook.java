@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 
 /**
  * What the payment gateway posts back once the customer has paid or been declined.
- * Signing it with HMAC comes in phase 5 (FR-PAY-04).
+ * The provider signs it with HMAC (FR-PAY-04); see {@link WebhookSignature}.
  */
 public record GatewayWebhook(@NotNull UUID paymentId, @NotBlank String transactionId, @NotNull Outcome outcome) {
 

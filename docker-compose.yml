@@ -8,6 +8,8 @@ name: ticket-rush
 
 x-service: &service
   restart: unless-stopped
+  # Spring gets 30 s to finish in-flight requests after SIGTERM (NFR-AVAIL-06); Docker waits a bit longer.
+  stop_grace_period: 35s
 
 # Every Java service ships traces and logs to the collector (NFR-OBS-01, 03).
 x-otel: &otel
@@ -15,10 +17,15 @@ x-otel: &otel
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
 
+# Tokens carry the public issuer; the signing keys are fetched from Keycloak inside the network (FR-IAM-01).
+x-jwt: &jwt
+  JWT_ISSUER: http://localhost:8180/realms/ticketrush
+  JWT_JWK_SET_URI: http://keycloak:8080/realms/ticketrush/protocol/openid-connect/certs
+
 services:
   postgres:
     image: postgres:17-alpine
-    # Five services with their own pools; booking alone uses up to 50 during a flash sale.
+    # Five services with their own pools: 50 + 30 + 20 + 20 + 10 connections at most.
     command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: postgres
@@ -70,6 +77,29 @@ services:
       timeout: 10s
       retries: 12
 
+  # Identity provider (FR-IAM-01). Tokens carry the issuer http://localhost:8180/realms/ticketrush
+  # wherever they were requested; services inside the network fetch signing keys over the back channel.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Demo accounts in the realm file take their password from here, not from Git.
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?}
+    volumes:
+      - ./infra/keycloak/ticketrush-realm.json:/opt/keycloak/data/import/ticketrush-realm.json:ro
+    ports: ["8180:8080"]
+    healthcheck:
+      # The image has no curl; ask the management port with bash alone.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   kafka-ui:
     image: kafbat/kafka-ui:latest
     ports: ["8090:8080"]
@@ -88,7 +118,7 @@ services:
     build: { context: ., args: { MODULE: api-gateway } }
     ports: ["${GATEWAY_PORT:-8080}:8080"]
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       EVENT_SERVICE_URI: http://event-service:8081
       BOOKING_SERVICE_URI: http://booking-service:8082
       PAYMENT_SERVICE_URI: http://payment-service:8083
@@ -99,6 +129,7 @@ services:
       REDIS_PORT: 6379
     depends_on:
       redis: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
       event-service: { condition: service_started }
       booking-service: { condition: service_started }
       payment-service: { condition: service_started }
@@ -109,7 +140,7 @@ services:
     <<: *service
     build: { context: ., args: { MODULE: event-service } }
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       DB_HOST: postgres
       DB_PORT: 5432
       DB_PASSWORD: ${EVENT_DB_PASSWORD:?}
@@ -122,7 +153,7 @@ services:
     <<: *service
     build: { context: ., args: { MODULE: booking-service } }
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       DB_HOST: postgres
       DB_PORT: 5432
       DB_PASSWORD: ${BOOKING_DB_PASSWORD:?}
@@ -141,13 +172,17 @@ services:
     <<: *service
     build: { context: ., args: { MODULE: payment-service } }
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       DB_HOST: postgres
       DB_PORT: 5432
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?}
+      # 12 listener threads plus checkouts: 10 left 184 requests waiting when Kafka came back.
+      DB_POOL_SIZE: 30
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # Checkout links handed to customers point at the public gateway.
       PUBLIC_BASE_URL: http://localhost:${GATEWAY_PORT:-8080}
+      # Shared with the (mock) payment provider, which signs every webhook with it (FR-PAY-04).
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:?}
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
@@ -156,7 +191,7 @@ services:
     <<: *service
     build: { context: ., args: { MODULE: ticket-service } }
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       DB_HOST: postgres
       DB_PORT: 5432
       DB_PASSWORD: ${TICKET_DB_PASSWORD:?}
@@ -170,7 +205,7 @@ services:
     <<: *service
     build: { context: ., args: { MODULE: notification-service } }
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       DB_HOST: postgres
       DB_PORT: 5432
       DB_PASSWORD: ${NOTIFY_DB_PASSWORD:?}
@@ -186,7 +221,7 @@ services:
     <<: *service
     build: { context: ., args: { MODULE: waiting-room-service } }
     environment:
-      <<: *otel
+      <<: [*otel, *jwt]
       REDIS_HOST: redis
       REDIS_PORT: 6379
       ADMISSION_TOKEN_KEY: ${ADMISSION_TOKEN_KEY:?}

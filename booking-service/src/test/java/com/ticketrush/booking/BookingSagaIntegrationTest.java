@@ -1,5 +1,6 @@
 package com.ticketrush.booking;
 
+import static com.ticketrush.security.TestJwts.customer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -172,14 +173,14 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         UUID eventId = publishEventOnSale();
         UUID unpaid = bookingService.create(booking("oanh", eventId, "VIP-A-03")).booking().id();
 
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "oanh")).hasStatusOk()
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).with(customer("oanh"))).hasStatusOk()
                 .bodyJson().hasPathSatisfying("$.cancelReason", reason -> reason.assertThat().isEqualTo("USER_CANCELLED"));
         assertThat(outboxTypesFor(unpaid)).containsExactly("CreatePayment", "BookingCancelled", "CancelPayment");
         await().atMost(WAIT).untilAsserted(() ->
                 assertThat(bookingService.create(booking("phuong", eventId, "VIP-A-03")).created()).isTrue());
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "oanh"))
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).with(customer("oanh")))
                 .as("cancelling twice").hasStatusOk();
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "someone-else"))
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).with(customer("someone-else")))
                 .hasStatus(HttpStatus.NOT_FOUND);
 
         UUID paid = bookingService.create(booking("quang", eventId, "VIP-B-01")).booking().id();
@@ -187,7 +188,7 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         paymentCreated(paid, paymentId);
         paymentSucceeded(paid, paymentId);
         await().atMost(WAIT).until(() -> statusOf(paid) == BookingStatus.CONFIRMED);
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", paid).header("X-User-Id", "quang"))
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", paid).with(customer("quang")))
                 .hasStatus(HttpStatus.CONFLICT);
     }
 
@@ -199,7 +200,7 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         UUID newer = bookingService.create(booking(user, eventId, "GA-B-02")).booking().id();
         bookingService.create(booking("someone-else", eventId, "GA-B-03"));
 
-        assertThat(mvc.get().uri("/api/bookings").header("X-User-Id", user)).hasStatusOk().bodyJson()
+        assertThat(mvc.get().uri("/api/bookings").with(customer(user))).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$.totalItems", total -> total.assertThat().isEqualTo(2))
                 .hasPathSatisfying("$.items[*].id",
                         ids -> ids.assertThat().asArray().containsExactly(newer.toString(), older.toString()));

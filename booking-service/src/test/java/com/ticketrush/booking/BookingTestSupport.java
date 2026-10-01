@@ -71,7 +71,7 @@ abstract class BookingTestSupport {
         UUID eventId = UUID.randomUUID();
         send(Topics.EVENT_EVENTS, eventId, UUID.randomUUID(), new EventPublished(EventPublished.CURRENT_VERSION, eventId,
                 "Rock Night", "Mỹ Đình", "Hanoi", Instant.now().plus(30, ChronoUnit.DAYS), salesOpenAt, SECTIONS,
-                waitingRoom));
+                waitingRoom, "organizer-1"));
         await().atMost(WAIT).until(() -> jdbc.sql("select count(*) from seat_inventory where event_id = :id")
                 .param("id", eventId).query(Integer.class).single() == 16);
         return eventId;

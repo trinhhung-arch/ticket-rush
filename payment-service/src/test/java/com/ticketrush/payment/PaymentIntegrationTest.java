@@ -1,5 +1,6 @@
 package com.ticketrush.payment;
 
+import static com.ticketrush.security.TestJwts.customer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -33,12 +34,17 @@ import com.ticketrush.common.contract.PaymentCommands.RefundPayment;
 import com.ticketrush.common.messaging.MessageHeaders;
 import com.ticketrush.common.messaging.Topics;
 
-@SpringBootTest
+@SpringBootTest(properties = "ticketrush.payment.webhook.secret=" + PaymentIntegrationTest.WEBHOOK_SECRET)
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class PaymentIntegrationTest {
 
+    static final String WEBHOOK_SECRET = "test-webhook-secret-0123456789abcdef0123";
+
     private static final Duration WAIT = Duration.ofSeconds(30);
+
+    @Autowired
+    WebhookSignature signature;
 
     @Autowired
     MockMvcTester mvc;
@@ -66,9 +72,9 @@ class PaymentIntegrationTest {
         assertThat((String) JsonPath.read(outboxPayload(bookingId, "PaymentCreated"), "$.checkoutUrl"))
                 .isEqualTo("http://localhost:8080/api/payments/" + paymentId + "/checkout");
 
-        assertThat(mvc.get().uri("/api/payments/{id}", paymentId).header("X-User-Id", "an")).hasStatusOk()
+        assertThat(mvc.get().uri("/api/payments/{id}", paymentId).with(customer("an"))).hasStatusOk()
                 .bodyJson().extractingPath("$.amountVnd").isEqualTo(1_600_000);
-        assertThat(mvc.get().uri("/api/payments/{id}", paymentId).header("X-User-Id", "someone-else"))
+        assertThat(mvc.get().uri("/api/payments/{id}", paymentId).with(customer("someone-else")))
                 .hasStatus(HttpStatus.NOT_FOUND);
     }
 
@@ -83,12 +89,53 @@ class PaymentIntegrationTest {
                 {"paymentId":"%s","transactionId":"txn-%s","outcome":"SUCCEEDED"}
                 """.formatted(paymentId, bookingId);
         for (int i = 0; i < 5; i++) {
-            assertThat(mvc.post().uri("/api/payments/webhooks/mock-gateway")
-                    .contentType(MediaType.APPLICATION_JSON).content(webhook))
+            assertThat(postWebhook(webhook, signature.sign(bytes(webhook), Instant.now())))
                     .hasStatusOk().bodyJson().extractingPath("$.status").isEqualTo("SUCCEEDED");
         }
 
         assertThat(outboxTypesFor(bookingId)).containsExactly("PaymentCreated", "PaymentSucceeded");
+    }
+
+    /** FR-PAY-04, NFR-SEC-02: unsigned, forged, tampered or stale webhooks are refused with 401. */
+    @Test
+    void onlyFreshCorrectlySignedWebhooksAreAccepted() {
+        UUID bookingId = UUID.randomUUID();
+        send(bookingId, createPayment(bookingId, Instant.now().plus(10, ChronoUnit.MINUTES)));
+        UUID paymentId = awaitPayment(bookingId);
+        String webhook = """
+                {"paymentId":"%s","transactionId":"txn-%s","outcome":"SUCCEEDED"}
+                """.formatted(paymentId, bookingId);
+        String tampered = webhook.replace("SUCCEEDED", "DECLINED");
+        Instant now = Instant.now();
+
+        assertThat(postWebhook(webhook, null)).as("unsigned")
+                .hasStatus(HttpStatus.UNAUTHORIZED).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(postWebhook(webhook, "t=1,v1=zz")).as("malformed").hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(postWebhook(tampered, signature.sign(bytes(webhook), now))).as("body changed after signing")
+                .hasStatus(HttpStatus.UNAUTHORIZED);
+        String forged = new WebhookSignature(new PaymentProperties("http://localhost",
+                new PaymentProperties.Webhook("test-attacker-guess-0123456789abcdef0123", Duration.ofMinutes(5))))
+                .sign(bytes(webhook), now);
+        assertThat(postWebhook(webhook, forged)).as("wrong secret").hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(postWebhook(webhook, signature.sign(bytes(webhook), now.minus(6, ChronoUnit.MINUTES))))
+                .as("replayed after 6 minutes").hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(statusOf(paymentId)).isEqualTo("PENDING");
+
+        assertThat(postWebhook(webhook, signature.sign(bytes(webhook), now.minus(4, ChronoUnit.MINUTES))))
+                .as("4 minutes is inside the window").hasStatusOk()
+                .bodyJson().extractingPath("$.status").isEqualTo("SUCCEEDED");
+    }
+
+    @Test
+    void readingAPaymentNeedsItsOwnersToken() {
+        UUID bookingId = UUID.randomUUID();
+        send(bookingId, createPayment(bookingId, Instant.now().plus(10, ChronoUnit.MINUTES)));
+        awaitPayment(bookingId);
+
+        assertThat(mvc.get().uri("/api/payments").param("bookingId", bookingId.toString()))
+                .hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.get().uri("/api/payments").param("bookingId", bookingId.toString()).with(customer("an")))
+                .hasStatusOk().bodyJson().extractingPath("$.status").isEqualTo("PENDING");
     }
 
     @Test
@@ -155,6 +202,19 @@ class PaymentIntegrationTest {
     private MvcTestResult checkout(UUID paymentId, String outcome) {
         return mvc.post().uri("/api/payments/{id}/checkout", paymentId)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"outcome\":\"%s\"}".formatted(outcome)).exchange();
+    }
+
+    private MvcTestResult postWebhook(String body, String signatureHeader) {
+        var request = mvc.post().uri("/api/payments/webhooks/mock-gateway")
+                .contentType(MediaType.APPLICATION_JSON).content(body);
+        if (signatureHeader != null) {
+            request = request.header(WebhookSignature.HEADER, signatureHeader);
+        }
+        return request.exchange();
+    }
+
+    private static byte[] bytes(String body) {
+        return body.getBytes(StandardCharsets.UTF_8);
     }
 
     private void send(UUID bookingId, Object command) {

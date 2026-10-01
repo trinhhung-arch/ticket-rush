@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * QR token = ticket id + HMAC-SHA256 of it. Only the ticket id is inside, no personal data, and a
- * token cannot be forged without the key (FR-TKT-01, NFR-SEC-04). Check-in verifies it (phase 5).
+ * token cannot be forged without the key (FR-TKT-01, NFR-SEC-04). {@link CheckIn} verifies it.
  */
 @Component
 public class TicketTokens {

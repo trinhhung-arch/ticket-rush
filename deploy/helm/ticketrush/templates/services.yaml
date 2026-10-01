@@ -1,0 +1,125 @@
+{{- /* One Deployment, Service and PodDisruptionBudget per Java service (NFR-AVAIL-04, NFR-AVAIL-06). */ -}}
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+{{- $ctx := dict "name" $name "root" $root }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $root.Values.service.replicas }}
+  selector:
+    matchLabels:
+      {{- include "ticketrush.selector" $ctx | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        {{- include "ticketrush.selector" $ctx | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: {{ $svc.port | quote }}
+    spec:
+      terminationGracePeriodSeconds: {{ $root.Values.service.terminationGracePeriodSeconds }}
+      # Keep the two instances on different nodes when there is room, so losing a node loses one.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "ticketrush.selector" $ctx | nindent 20 }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: {{ $name }}
+          image: "{{ $root.Values.images.prefix }}{{ $name }}:{{ $root.Values.images.tag }}"
+          imagePullPolicy: {{ $root.Values.images.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+          env:
+            - name: PORT
+              value: {{ $svc.port | quote }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ $root.Values.service.javaOptions | quote }}
+            # Tokens carry the public issuer; keys come from Keycloak inside the cluster (ADR 0006).
+            - name: JWT_ISSUER
+              value: "{{ $root.Values.publicUrls.keycloak }}/realms/ticketrush"
+            - name: JWT_JWK_SET_URI
+              value: http://keycloak:8080/realms/ticketrush/protocol/openid-connect/certs
+            {{- range $key, $value := $root.Values.service.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $value := $svc.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- with $svc.publicBaseUrlEnv }}
+            - name: {{ . }}
+              value: {{ $root.Values.publicUrls.gateway | quote }}
+            {{- end }}
+            {{- range $env, $key := $svc.secretEnv }}
+            {{- include "ticketrush.secretEnv" (dict "env" $env "key" $key "root" $root) | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml ($svc.resources | default $root.Values.service.resources) | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "{{ $root.Values.service.preStopSleepSeconds }}"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ if $svc.nodePort }}NodePort{{ else }}ClusterIP{{ end }}
+  selector:
+    {{- include "ticketrush.selector" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: http
+      {{- with $svc.nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "ticketrush.selector" $ctx | nindent 6 }}
+{{- end }}

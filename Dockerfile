@@ -10,9 +10,10 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     && cp "${MODULE}"/target/"${MODULE}"-*.jar /workspace/app.jar
 
 FROM eclipse-temurin:21-jre
-RUN groupadd --system app && useradd --system --gid app app
+# A fixed numeric user, so Kubernetes can enforce runAsNonRoot.
+RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app app
 WORKDIR /app
 COPY --from=build /workspace/app.jar app.jar
-USER app
+USER 10001:10001
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 ENTRYPOINT ["java", "-jar", "app.jar"]

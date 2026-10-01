@@ -1,6 +1,7 @@
 package com.ticketrush.gateway;
 
 import java.net.InetSocketAddress;
+import java.security.Principal;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -12,12 +13,10 @@ import reactor.core.publisher.Mono;
 
 /**
  * Token buckets in Redis, shared by every gateway instance (FR-GW-02, NFR-SEC-06). A bucket belongs
- * to the caller's user id, or to the client IP for anonymous calls.
+ * to the verified token's subject, or to the client IP for anonymous calls.
  */
 @Configuration(proxyBeanMethods = false)
 class RateLimitConfig {
-
-    static final String USER_ID = "X-User-Id";
 
     @Bean
     RedisRateLimiter bookingRateLimiter(@Value("${ticketrush.rate-limit.bookings-per-second}") int perSecond) {
@@ -27,8 +26,9 @@ class RateLimitConfig {
 
     @Bean
     KeyResolver callerKeyResolver() {
-        return exchange -> Mono.justOrEmpty(exchange.getRequest().getHeaders().getFirst(USER_ID))
-                .map(userId -> "user:" + userId)
+        return exchange -> exchange.getPrincipal()
+                .map(Principal::getName)
+                .map(subject -> "user:" + subject)
                 .switchIfEmpty(Mono.fromSupplier(() -> "ip:" + Optional.ofNullable(exchange.getRequest().getRemoteAddress())
                         .map(InetSocketAddress::getHostString)
                         .orElse("unknown")));

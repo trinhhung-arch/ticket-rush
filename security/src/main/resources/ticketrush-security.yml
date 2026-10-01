@@ -1,0 +1,10 @@
+# Token settings imported by every servlet service (spring.config.import). Tokens from Keycloak carry
+# the public issuer; inside Docker or Kubernetes the keys come from the internal Keycloak address.
+ticketrush:
+  security:
+    issuer: ${JWT_ISSUER:http://localhost:8180/realms/ticketrush}
+    jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/ticketrush/protocol/openid-connect/certs}
+    audience: ticketrush-api
+    load-test:
+      # Trusted only when set explicitly, by load-test/compose.yml for local k6 runs.
+      secret: ${LOAD_TEST_ISSUER_SECRET:}

@@ -1,0 +1,14 @@
+# kind cluster for TicketRush: one control plane and two workers, so the two instances of each
+# service land on different nodes. NodePorts are published on the host:
+#   28080 -> API gateway, 28180 -> Keycloak, 28025 -> Mailpit
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ticketrush
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - { containerPort: 30080, hostPort: 28080 }
+      - { containerPort: 30180, hostPort: 28180 }
+      - { containerPort: 30825, hostPort: 28025 }
+  - role: worker
+  - role: worker

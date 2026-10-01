@@ -1,5 +1,5 @@
 // Read paths (NFR-PERF-03): the event list and the 5,000-seat map under steady load.
-//   k6 run -e GATEWAY=http://localhost:8080 load-test/read-paths.js
+//   k6 run -e GATEWAY=http://localhost:8080 -e LOAD_TEST_JWT_SECRET=... load-test/read-paths.js
 import http from 'k6/http';
 import { GATEWAY, createEvent } from './lib.js';
 

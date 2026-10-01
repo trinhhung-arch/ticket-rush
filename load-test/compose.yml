@@ -1,0 +1,21 @@
+# Layered on for local k6 runs only:
+#   docker compose -f docker-compose.yml -f load-test/compose.yml up -d
+# The gateway and the services then also trust tokens from the "ticketrush-load-test" issuer, signed
+# with LOAD_TEST_JWT_SECRET from .env, so k6 can act as tens of thousands of distinct customers
+# without creating them in Keycloak. The plain docker-compose.yml and the Helm chart never set this.
+x-load-test: &load-test
+  LOAD_TEST_ISSUER_SECRET: ${LOAD_TEST_JWT_SECRET:?}
+
+services:
+  api-gateway:
+    environment: *load-test
+  event-service:
+    environment: *load-test
+  booking-service:
+    environment: *load-test
+  payment-service:
+    environment: *load-test
+  ticket-service:
+    environment: *load-test
+  waiting-room-service:
+    environment: *load-test

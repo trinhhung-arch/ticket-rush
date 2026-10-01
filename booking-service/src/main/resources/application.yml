@@ -1,10 +1,17 @@
 server:
   port: ${PORT:8082}
+  # NFR-AVAIL-06: finish in-flight requests on SIGTERM, for at most 30 s.
   shutdown: graceful
+  tomcat:
+    # Room for a burst of new connections from the gateway. At the default of 100 the kernel
+    # dropped SYNs during the payment outage drill (ListenOverflows), and gateway connects timed out.
+    accept-count: 1024
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   config:
-    import: classpath:ticketrush-observability.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: booking-service
   threads:
@@ -40,6 +47,10 @@ spring:
 
 
 ticketrush:
+  security:
+    # The live seat map is part of browsing an event; everything else needs a customer token.
+    public-paths:
+      - GET /api/events/*/seats
   booking:
     hold-duration: PT10M
     hold-grace: PT60S

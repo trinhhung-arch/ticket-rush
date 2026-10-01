@@ -1,10 +1,17 @@
 server:
   port: ${PORT:8083}
+  # NFR-AVAIL-06: finish in-flight requests on SIGTERM, for at most 30 s.
   shutdown: graceful
+  tomcat:
+    # Room for a burst of new connections from the gateway. At the default of 100 the kernel
+    # dropped SYNs during the payment outage drill (ListenOverflows), and gateway connects timed out.
+    accept-count: 1024
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   config:
-    import: classpath:ticketrush-observability.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,optional:file:.env[.properties],optional:file:../.env[.properties]
   application:
     name: payment-service
   threads:
@@ -14,6 +21,10 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:15432}/${DB_NAME:payment_db}
     username: ${DB_USER:payment_svc}
     password: ${DB_PASSWORD:${PAYMENT_DB_PASSWORD:}}
+    hikari:
+      # Every Kafka listener thread holds a connection for its transaction, so at least the
+      # listener concurrency plus room for HTTP requests.
+      maximum-pool-size: ${DB_POOL_SIZE:20}
   jpa:
     open-in-view: false
     hibernate:
@@ -33,6 +44,15 @@ spring:
 ticketrush:
   payment:
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+    webhook:
+      # Shared with the payment provider; webhooks without a valid signature get 401 (FR-PAY-04).
+      secret: ${PAYMENT_WEBHOOK_SECRET:}
+      tolerance: PT5M
+  security:
+    # The provider's checkout page and its webhooks carry no user token; webhooks are signed instead.
+    public-paths:
+      - POST /api/payments/*/checkout
+      - POST /api/payments/webhooks/**
   outbox:
     relay:
       interval-ms: 200

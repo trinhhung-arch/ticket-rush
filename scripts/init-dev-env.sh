@@ -27,6 +27,12 @@ add TICKET_DB_PASSWORD "$(secret 24)"
 add NOTIFY_DB_PASSWORD "$(secret 24)"
 add TICKET_SIGNING_KEY "$(secret 32)"
 add ADMISSION_TOKEN_KEY "$(secret 32)"
+add PAYMENT_WEBHOOK_SECRET "$(secret 32)"
+add KEYCLOAK_ADMIN_PASSWORD "$(secret 16)"
+# Password of the demo accounts (organizer@, admin@, alice@, bob@, chi@, dung@ticketrush.dev).
+add DEMO_USER_PASSWORD "$(secret 8)"
+# Signs the tokens k6 mints; only trusted when load-test/compose.yml is layered on (see load-test/README).
+add LOAD_TEST_JWT_SECRET "$(secret 32)"
 add GATEWAY_PORT "${GATEWAY_PORT:-8080}"
 
 if [ ${#added[@]} -eq 0 ]; then

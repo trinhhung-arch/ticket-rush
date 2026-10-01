@@ -29,8 +29,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 
-/** FR-GW-02 and NFR-SEC-06 against a real Redis: 10 booking requests per second per caller. */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+/** FR-GW-02 and NFR-SEC-06 against a real Redis: 10 booking requests per second per signed-in user. */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = Tokens.SECRET_PROPERTY)
 @Import(RateLimitTest.RedisContainer.class)
 class RateLimitTest {
 
@@ -77,17 +77,15 @@ class RateLimitTest {
     }
 
     @Test
-    void anonymousCallersShareABucketPerIp() {
-        Map<Integer, Long> statuses = burst(20, null);
-
-        assertThat(statuses.getOrDefault(429, 0L)).isGreaterThanOrEqualTo(8L);
+    void anonymousCallersAreTurnedAwayBeforeTheLimiter() {
+        assertThat(burst(5, null)).containsOnlyKeys(401);
     }
 
     @Test
     void readingBookingsIsNotRateLimited() throws Exception {
         for (int i = 0; i < 15; i++) {
             HttpResponse<Void> response = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/bookings"))
-                    .header("X-User-Id", "reader").build(), HttpResponse.BodyHandlers.discarding());
+                    .header("Authorization", Tokens.bearer("reader")).build(), HttpResponse.BodyHandlers.discarding());
             assertThat(response.statusCode()).isEqualTo(201);
         }
     }
@@ -99,7 +97,7 @@ class RateLimitTest {
                     .POST(HttpRequest.BodyPublishers.ofString("{}"))
                     .header("Content-Type", "application/json");
             if (userId != null) {
-                request.header("X-User-Id", userId);
+                request.header("Authorization", Tokens.bearer(userId));
             }
             return http.sendAsync(request.build(), HttpResponse.BodyHandlers.discarding()).thenApply(HttpResponse::statusCode);
         }).toList();

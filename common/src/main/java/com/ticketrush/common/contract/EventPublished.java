@@ -10,6 +10,8 @@ import java.util.UUID;
  *
  * @param waitingRoom buyers need an admission token from the waiting room (FR-WR-03); absent in
  *                    older messages, which then read as false
+ * @param organizerId the account that runs the event; ticket-service lets only them (or an admin)
+ *                    check its tickets in (FR-TKT-03). Absent (null) in older messages
  */
 public record EventPublished(
         int version,
@@ -20,7 +22,8 @@ public record EventPublished(
         Instant startsAt,
         Instant salesOpenAt,
         List<SectionSpec> sections,
-        boolean waitingRoom) {
+        boolean waitingRoom,
+        String organizerId) {
 
     public static final int CURRENT_VERSION = 1;
 }
