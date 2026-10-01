@@ -62,6 +62,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # The saga verifies PaymentSucceeded events against payment-service before confirming (NFR-SEC-01).
+      PAYMENT_SERVICE_URI: http://payment-service:8083
     secretEnv:
       DB_PASSWORD: BOOKING_DB_PASSWORD
       ADMISSION_TOKEN_KEY: ADMISSION_TOKEN_KEY

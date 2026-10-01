@@ -53,6 +53,9 @@ ticketrush:
     public-paths:
       - POST /api/payments/*/checkout
       - POST /api/payments/webhooks/**
+      # Service-to-service payment lookup for the booking saga. The gateway routes only /api/**, so
+      # this is reachable from inside the cluster only; it carries no user token (NFR-SEC-01).
+      - GET /internal/payments/**
   outbox:
     relay:
       interval-ms: 200

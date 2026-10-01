@@ -35,7 +35,7 @@ import com.ticketrush.common.messaging.Topics;
 @AutoConfigureMockMvc
 @AutoConfigureTracing
 @AutoConfigureMetrics
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, StubPaymentVerifier.Config.class})
 abstract class BookingTestSupport {
 
     /** VIP 2x3 at 3,000,000 VND and GA 2x5 at 800,000 VND: 16 seats. */
@@ -61,6 +61,8 @@ abstract class BookingTestSupport {
 
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    StubPaymentVerifier paymentVerifier;
 
     /** Publishes an event the way event-service would and waits until its 16 seats are in the inventory. */
     UUID publishEvent(Instant salesOpenAt) {

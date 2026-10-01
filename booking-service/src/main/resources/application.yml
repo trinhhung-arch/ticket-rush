@@ -51,6 +51,9 @@ ticketrush:
     # The live seat map is part of browsing an event; everything else needs a customer token.
     public-paths:
       - GET /api/events/*/seats
+  payment:
+    # The saga verifies a PaymentSucceeded event against payment-service before confirming (NFR-SEC-01).
+    base-url: ${PAYMENT_SERVICE_URI:http://localhost:8083}
   booking:
     hold-duration: PT10M
     hold-grace: PT60S
