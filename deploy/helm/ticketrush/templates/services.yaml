@@ -48,6 +48,11 @@ spec:
           ports:
             - name: http
               containerPort: {{ $svc.port }}
+            {{- with $svc.managementPort }}
+            # Actuator on a separate, unexposed port (see api-gateway); probes and scraping use it.
+            - name: mgmt
+              containerPort: {{ . }}
+            {{- end }}
           env:
             - name: PORT
               value: {{ $svc.port | quote }}
@@ -77,15 +82,16 @@ spec:
             {{- toYaml ($svc.resources | default $root.Values.service.resources) | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
+          {{- $probePort := ternary "mgmt" "http" (hasKey $svc "managementPort") }}
           startupProbe:
-            httpGet: { path: /actuator/health/liveness, port: http }
+            httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
             periodSeconds: 5
             failureThreshold: 36
           livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: http }
+            httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
             periodSeconds: 10
           readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: http }
+            httpGet: { path: /actuator/health/readiness, port: {{ $probePort }} }
             periodSeconds: 3
             failureThreshold: 2
           lifecycle:

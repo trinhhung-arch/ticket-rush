@@ -32,7 +32,10 @@ services:
   api-gateway:
     port: 8080
     nodePort: 30080
+    # Actuator (metrics included) on an internal-only port; the nodePort serves only /api.
+    managementPort: 8090
     env:
+      MANAGEMENT_PORT: "8090"
       EVENT_SERVICE_URI: http://event-service:8081
       BOOKING_SERVICE_URI: http://booking-service:8082
       PAYMENT_SERVICE_URI: http://payment-service:8083
@@ -40,6 +43,8 @@ services:
       WAITING_ROOM_SERVICE_URI: http://waiting-room-service:8086
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+    secretEnv:
+      REDIS_PASSWORD: REDIS_PASSWORD
   event-service:
     port: 8081
     env:
@@ -67,6 +72,7 @@ services:
     secretEnv:
       DB_PASSWORD: BOOKING_DB_PASSWORD
       ADMISSION_TOKEN_KEY: ADMISSION_TOKEN_KEY
+      REDIS_PASSWORD: REDIS_PASSWORD
   payment-service:
     port: 8083
     env:
@@ -107,6 +113,7 @@ services:
       WAITING_ROOM_CAPACITY: "2000"
     secretEnv:
       ADMISSION_TOKEN_KEY: ADMISSION_TOKEN_KEY
+      REDIS_PASSWORD: REDIS_PASSWORD
 
 # Single-instance infrastructure for a local cluster. In production these would be managed services
 # (RDS, ElastiCache, MSK, a Keycloak cluster) and this section switched off.
