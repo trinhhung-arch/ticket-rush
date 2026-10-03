@@ -5,9 +5,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.common.contract.EventPublished;
-import com.ticketrush.common.messaging.IncomingMessage;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.event.EventPublished;
+import com.ticketrush.messaging.kafka.IncomingMessage;
 
 /** Learns each event's organizer, so check-in can be limited to them (FR-TKT-03). */
 @Component

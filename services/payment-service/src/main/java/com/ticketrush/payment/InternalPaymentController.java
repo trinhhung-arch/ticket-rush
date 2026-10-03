@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ticketrush.common.contract.PaymentStatusView;
+import com.ticketrush.contracts.payment.PaymentStatusView;
 
 /**
  * Service-to-service lookup the booking saga uses to check a {@code PaymentSucceeded} event against the

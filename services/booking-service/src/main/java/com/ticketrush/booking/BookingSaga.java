@@ -17,19 +17,19 @@ import com.ticketrush.booking.seat.SeatHoldStore;
 import com.ticketrush.booking.seat.SeatInventory;
 import com.ticketrush.booking.seat.SeatRow;
 import com.ticketrush.booking.seat.SeatStatus;
-import com.ticketrush.common.contract.BookingEvents;
-import com.ticketrush.common.contract.BookingEvents.BookingCancelled;
-import com.ticketrush.common.contract.BookingEvents.BookingConfirmed;
-import com.ticketrush.common.contract.PaymentCommands;
-import com.ticketrush.common.contract.PaymentCommands.CancelPayment;
-import com.ticketrush.common.contract.PaymentCommands.RefundPayment;
-import com.ticketrush.common.contract.PaymentEvents.PaymentCreated;
-import com.ticketrush.common.contract.PaymentEvents.PaymentFailed;
-import com.ticketrush.common.contract.PaymentEvents.PaymentSucceeded;
-import com.ticketrush.common.contract.SeatLine;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.outbox.OutboxWriter;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.booking.BookingEvents;
+import com.ticketrush.contracts.booking.BookingEvents.BookingCancelled;
+import com.ticketrush.contracts.booking.BookingEvents.BookingConfirmed;
+import com.ticketrush.contracts.booking.SeatLine;
+import com.ticketrush.contracts.payment.PaymentCommands;
+import com.ticketrush.contracts.payment.PaymentCommands.CancelPayment;
+import com.ticketrush.contracts.payment.PaymentCommands.RefundPayment;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentCreated;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentFailed;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentSucceeded;
+import com.ticketrush.messaging.outbox.OutboxWriter;
+import com.ticketrush.web.ApiException;
 
 /**
  * Orchestrates the booking saga (FR-BKG-09, ADR 0001). Every step locks the booking row first, so

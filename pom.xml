@@ -21,7 +21,9 @@
     <modules>
         <module>libs/observability</module>
         <module>libs/security</module>
-        <module>libs/common</module>
+        <module>libs/contracts</module>
+        <module>libs/messaging</module>
+        <module>libs/web</module>
         <module>services/api-gateway</module>
         <module>services/event-service</module>
         <module>services/booking-service</module>
@@ -48,7 +50,17 @@
         <dependencies>
             <dependency>
                 <groupId>com.ticketrush</groupId>
-                <artifactId>common</artifactId>
+                <artifactId>contracts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ticketrush</groupId>
+                <artifactId>messaging</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ticketrush</groupId>
+                <artifactId>web</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -6,12 +6,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.common.contract.PaymentCommands.CancelPayment;
-import com.ticketrush.common.contract.PaymentCommands.CreatePayment;
-import com.ticketrush.common.contract.PaymentCommands.RefundPayment;
-import com.ticketrush.common.inbox.IdempotentConsumer;
-import com.ticketrush.common.messaging.IncomingMessage;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.payment.PaymentCommands.CancelPayment;
+import com.ticketrush.contracts.payment.PaymentCommands.CreatePayment;
+import com.ticketrush.contracts.payment.PaymentCommands.RefundPayment;
+import com.ticketrush.messaging.inbox.IdempotentConsumer;
+import com.ticketrush.messaging.kafka.IncomingMessage;
 
 @Component
 class PaymentCommandsListener {

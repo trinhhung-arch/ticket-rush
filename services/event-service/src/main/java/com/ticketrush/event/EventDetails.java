@@ -3,7 +3,7 @@ package com.ticketrush.event;
 import java.time.Instant;
 import java.util.List;
 
-import com.ticketrush.common.contract.SectionSpec;
+import com.ticketrush.contracts.event.SectionSpec;
 
 /**
  * Everything an organizer can edit while the event is still a draft.

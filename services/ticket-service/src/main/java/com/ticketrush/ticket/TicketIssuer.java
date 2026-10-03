@@ -12,13 +12,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketrush.common.contract.BookingEvents.BookingConfirmed;
-import com.ticketrush.common.contract.SeatLine;
-import com.ticketrush.common.contract.TicketEvents;
-import com.ticketrush.common.contract.TicketEvents.IssuedTicket;
-import com.ticketrush.common.contract.TicketEvents.TicketsIssued;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.outbox.OutboxWriter;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.booking.BookingEvents.BookingConfirmed;
+import com.ticketrush.contracts.booking.SeatLine;
+import com.ticketrush.contracts.ticket.TicketEvents;
+import com.ticketrush.contracts.ticket.TicketEvents.IssuedTicket;
+import com.ticketrush.contracts.ticket.TicketEvents.TicketsIssued;
+import com.ticketrush.messaging.outbox.OutboxWriter;
 
 @Service
 class TicketIssuer {

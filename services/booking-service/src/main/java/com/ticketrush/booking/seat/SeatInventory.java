@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-import com.ticketrush.common.seat.Seat;
+import com.ticketrush.contracts.event.Seat;
 
 /**
  * The database side of seat state. It is the last line of defence against overselling: a seat only

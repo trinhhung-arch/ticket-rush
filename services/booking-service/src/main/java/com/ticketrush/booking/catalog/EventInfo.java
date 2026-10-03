@@ -8,8 +8,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import com.ticketrush.common.contract.EventPublished;
-import com.ticketrush.common.seat.SeatLayout;
+import com.ticketrush.contracts.event.EventPublished;
+import com.ticketrush.contracts.event.SeatLayout;
 
 /** booking-service's own copy of a published event, built from {@link EventPublished}. */
 @Entity

@@ -22,10 +22,10 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.TestcontainersConfiguration;
-import com.ticketrush.common.contract.EventPublished;
-import com.ticketrush.common.contract.SectionSpec;
-import com.ticketrush.common.messaging.MessageHeaders;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.MessageHeaders;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.event.EventPublished;
+import com.ticketrush.contracts.event.SectionSpec;
 
 /**
  * Shared Spring context (one set of containers) and helpers for booking-service integration tests.

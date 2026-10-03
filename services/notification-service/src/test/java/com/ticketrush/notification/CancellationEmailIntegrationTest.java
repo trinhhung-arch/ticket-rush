@@ -24,12 +24,12 @@ import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.TestcontainersConfiguration;
-import com.ticketrush.common.contract.BookingEvents;
-import com.ticketrush.common.contract.BookingEvents.BookingCancelled;
-import com.ticketrush.common.contract.PaymentEvents;
-import com.ticketrush.common.contract.PaymentEvents.PaymentRefunded;
-import com.ticketrush.common.messaging.MessageHeaders;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.MessageHeaders;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.booking.BookingEvents;
+import com.ticketrush.contracts.booking.BookingEvents.BookingCancelled;
+import com.ticketrush.contracts.payment.PaymentEvents;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentRefunded;
 
 /** FR-NTF-02 against Mailpit: the reason is spelled out, and a refund is reported whatever order the events come in. */
 @SpringBootTest

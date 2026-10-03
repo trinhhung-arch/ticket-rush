@@ -39,16 +39,16 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.TestcontainersConfiguration;
-import com.ticketrush.common.contract.BookingEvents;
-import com.ticketrush.common.contract.BookingEvents.BookingConfirmed;
-import com.ticketrush.common.contract.EventPublished;
-import com.ticketrush.common.contract.SectionSpec;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.MessageHeaders;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.booking.BookingEvents;
+import com.ticketrush.contracts.booking.BookingEvents.BookingConfirmed;
+import com.ticketrush.contracts.booking.SeatLine;
+import com.ticketrush.contracts.event.EventPublished;
+import com.ticketrush.contracts.event.SectionSpec;
 import com.ticketrush.security.Caller;
 import com.ticketrush.security.Roles;
-import com.ticketrush.common.contract.SeatLine;
-import com.ticketrush.common.messaging.MessageHeaders;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.web.ApiException;
 
 @SpringBootTest
 @AutoConfigureMockMvc

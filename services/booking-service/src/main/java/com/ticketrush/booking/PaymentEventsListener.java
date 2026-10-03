@@ -6,12 +6,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.common.contract.PaymentEvents.PaymentCreated;
-import com.ticketrush.common.contract.PaymentEvents.PaymentFailed;
-import com.ticketrush.common.contract.PaymentEvents.PaymentSucceeded;
-import com.ticketrush.common.inbox.IdempotentConsumer;
-import com.ticketrush.common.messaging.IncomingMessage;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentCreated;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentFailed;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentSucceeded;
+import com.ticketrush.messaging.inbox.IdempotentConsumer;
+import com.ticketrush.messaging.kafka.IncomingMessage;
 
 /** Feeds payment outcomes into the saga. PaymentRefunded needs no action here. */
 @Component

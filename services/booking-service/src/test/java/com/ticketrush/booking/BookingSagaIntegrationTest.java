@@ -17,12 +17,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 
-import com.ticketrush.common.contract.PaymentEvents;
-import com.ticketrush.common.contract.PaymentEvents.PaymentCreated;
-import com.ticketrush.common.contract.PaymentEvents.PaymentFailed;
-import com.ticketrush.common.contract.PaymentEvents.PaymentSucceeded;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.payment.PaymentEvents;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentCreated;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentFailed;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentSucceeded;
+import com.ticketrush.web.ApiException;
 
 /** The booking saga, driven by the payment events payment-service would send (FR-BKG-05, FR-BKG-09, FR-PAY-06). */
 class BookingSagaIntegrationTest extends BookingTestSupport {

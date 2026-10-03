@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-import com.ticketrush.common.contract.SectionSpec;
+import com.ticketrush.contracts.event.SectionSpec;
 
 /** Body of create and update (FR-EVT-01). Cross-field rules live in {@link EventService}. */
 record EventRequest(

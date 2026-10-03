@@ -27,12 +27,12 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.TestcontainersConfiguration;
-import com.ticketrush.common.contract.PaymentCommands;
-import com.ticketrush.common.contract.PaymentCommands.CancelPayment;
-import com.ticketrush.common.contract.PaymentCommands.CreatePayment;
-import com.ticketrush.common.contract.PaymentCommands.RefundPayment;
-import com.ticketrush.common.messaging.MessageHeaders;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.MessageHeaders;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.payment.PaymentCommands;
+import com.ticketrush.contracts.payment.PaymentCommands.CancelPayment;
+import com.ticketrush.contracts.payment.PaymentCommands.CreatePayment;
+import com.ticketrush.contracts.payment.PaymentCommands.RefundPayment;
 
 @SpringBootTest(properties = "ticketrush.payment.webhook.secret=" + PaymentIntegrationTest.WEBHOOK_SECRET)
 @AutoConfigureMockMvc

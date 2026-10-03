@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.web.ApiException;
 
 /**
  * Plays the payment provider for the demo: it "charges" the card, then signs the webhook with the

@@ -18,8 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
 
-import com.ticketrush.common.contract.TicketEvents.IssuedTicket;
-import com.ticketrush.common.contract.TicketEvents.TicketsIssued;
+import com.ticketrush.contracts.ticket.TicketEvents.IssuedTicket;
+import com.ticketrush.contracts.ticket.TicketEvents.TicketsIssued;
 
 /** Sends the confirmation email with one inline QR code per ticket (FR-NTF-01). */
 @Service

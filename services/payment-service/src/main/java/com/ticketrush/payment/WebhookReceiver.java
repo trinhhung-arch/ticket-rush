@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.web.ApiException;
 
 /**
  * The one way into {@link PaymentService#handleWebhook}: the signature is checked against the raw

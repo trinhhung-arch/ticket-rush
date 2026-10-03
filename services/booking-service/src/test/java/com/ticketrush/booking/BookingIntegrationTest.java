@@ -29,9 +29,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
-import com.ticketrush.common.web.ApiException;
 import com.ticketrush.security.Roles;
 import com.ticketrush.security.TestJwts;
+import com.ticketrush.web.ApiException;
 
 class BookingIntegrationTest extends BookingTestSupport {
 

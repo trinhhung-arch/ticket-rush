@@ -20,9 +20,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import org.hibernate.annotations.BatchSize;
 
-import com.ticketrush.common.contract.EventPublished;
-import com.ticketrush.common.contract.SectionSpec;
-import com.ticketrush.common.seat.SeatLayout;
+import com.ticketrush.contracts.event.EventPublished;
+import com.ticketrush.contracts.event.SeatLayout;
+import com.ticketrush.contracts.event.SectionSpec;
 
 @Entity
 @Table(name = "event")

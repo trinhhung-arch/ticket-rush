@@ -285,7 +285,9 @@ services/                 7 ứng dụng Spring Boot, mỗi cái một image
 libs/                     thư viện dùng chung, không có main class
   observability/          OpenTelemetry, Prometheus, Logback gửi OTLP, cấu hình quan sát dùng chung
   security/               resource server JWT dùng chung: Caller, @CustomerOnly/@OrganizerOnly, 401/403 problem+json, OpenAPI
-  common/                 service chassis dùng chung: outbox, idempotent consumer, contract message, xử lý lỗi
+  contracts/              message và DTO giữa các service, chia package theo service phát hành; Java thuần
+  messaging/              cấu hình Kafka, transactional outbox, idempotent consumer
+  web/                    lỗi problem+json, phân trang, header dùng chung cho REST API
 load-test/                kịch bản k6: flash sale, waiting room, API đọc, diễn tập sự cố
 deploy/helm/ticketrush/   Helm chart: 7 service x 2 instance, hạ tầng, Secret sinh tự động
 deploy/kind/              cụm kind 3 node và script dựng

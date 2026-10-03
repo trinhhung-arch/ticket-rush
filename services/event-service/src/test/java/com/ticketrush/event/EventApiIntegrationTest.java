@@ -30,8 +30,8 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 import com.ticketrush.TestcontainersConfiguration;
-import com.ticketrush.common.messaging.MessageHeaders;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.MessageHeaders;
+import com.ticketrush.contracts.Topics;
 
 @SpringBootTest
 @AutoConfigureMockMvc

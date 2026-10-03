@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.kafka.autoconfigure.KafkaConnectionDetails;
 
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.web.ApiException;
 
 /** NFR-OBS-01 and NFR-OBS-02 at the service level; the dashboards themselves are checked with Docker Compose. */
 class ObservabilityIntegrationTest extends BookingTestSupport {

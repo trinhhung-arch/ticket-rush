@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ticketrush.booking.catalog.EventInfoRepository;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.web.ApiException;
 
 /** Seat map with live state (FR-BKG-01). The gateway routes /api/events/{id}/seats here. */
 @RestController

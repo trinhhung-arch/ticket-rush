@@ -9,8 +9,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketrush.common.web.ApiException;
 import com.ticketrush.security.Caller;
+import com.ticketrush.web.ApiException;
 
 /**
  * FR-TKT-03: gate staff scan the QR code. A ticket gets in once: the conditional update lets exactly

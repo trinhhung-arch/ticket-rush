@@ -9,11 +9,11 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.booking.seat.SeatInventory;
-import com.ticketrush.common.contract.EventPublished;
-import com.ticketrush.common.inbox.IdempotentConsumer;
-import com.ticketrush.common.messaging.IncomingMessage;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.seat.SeatLayout;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.event.EventPublished;
+import com.ticketrush.contracts.event.SeatLayout;
+import com.ticketrush.messaging.inbox.IdempotentConsumer;
+import com.ticketrush.messaging.kafka.IncomingMessage;
 
 /** Builds the seat inventory of an event when event-service publishes it. */
 @Component

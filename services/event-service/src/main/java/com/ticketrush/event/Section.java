@@ -10,7 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
-import com.ticketrush.common.contract.SectionSpec;
+import com.ticketrush.contracts.event.SectionSpec;
 
 @Entity
 @Table(name = "event_section")

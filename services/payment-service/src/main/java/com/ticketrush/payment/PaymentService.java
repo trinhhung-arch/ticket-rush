@@ -9,18 +9,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketrush.common.contract.PaymentCommands.CancelPayment;
-import com.ticketrush.common.contract.PaymentCommands.CreatePayment;
-import com.ticketrush.common.contract.PaymentCommands.RefundPayment;
-import com.ticketrush.common.contract.PaymentEvents;
-import com.ticketrush.common.contract.PaymentEvents.PaymentCreated;
-import com.ticketrush.common.contract.PaymentEvents.PaymentFailed;
-import com.ticketrush.common.contract.PaymentEvents.PaymentRefunded;
-import com.ticketrush.common.contract.PaymentEvents.PaymentSucceeded;
-import com.ticketrush.common.contract.PaymentStatusView;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.outbox.OutboxWriter;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.payment.PaymentCommands.CancelPayment;
+import com.ticketrush.contracts.payment.PaymentCommands.CreatePayment;
+import com.ticketrush.contracts.payment.PaymentCommands.RefundPayment;
+import com.ticketrush.contracts.payment.PaymentEvents;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentCreated;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentFailed;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentRefunded;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentSucceeded;
+import com.ticketrush.contracts.payment.PaymentStatusView;
+import com.ticketrush.messaging.outbox.OutboxWriter;
+import com.ticketrush.web.ApiException;
 
 /**
  * Payment side of the booking saga. Every state change and the event announcing it are written in one

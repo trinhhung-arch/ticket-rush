@@ -20,11 +20,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.ticketrush.common.web.PageResponse;
 import com.ticketrush.event.EventViews.EventSummary;
 import com.ticketrush.event.EventViews.EventView;
 import com.ticketrush.security.Caller;
 import com.ticketrush.security.OrganizerOnly;
+import com.ticketrush.web.PageResponse;
 
 @RestController
 @RequestMapping("/api/events")

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
-import com.ticketrush.common.contract.PaymentStatusView;
+import com.ticketrush.contracts.payment.PaymentStatusView;
 
 /**
  * Asks payment-service, over {@code /internal/payments/{bookingId}}, whether a booking is really paid.

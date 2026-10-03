@@ -6,11 +6,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.common.contract.BookingEvents.BookingCancelled;
-import com.ticketrush.common.contract.PaymentEvents.PaymentRefunded;
-import com.ticketrush.common.inbox.IdempotentConsumer;
-import com.ticketrush.common.messaging.IncomingMessage;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.booking.BookingEvents.BookingCancelled;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentRefunded;
+import com.ticketrush.messaging.inbox.IdempotentConsumer;
+import com.ticketrush.messaging.kafka.IncomingMessage;
 
 @Component
 class CancellationListener {

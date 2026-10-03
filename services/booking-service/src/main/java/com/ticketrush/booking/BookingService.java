@@ -24,11 +24,11 @@ import com.ticketrush.booking.seat.SeatHoldStore;
 import com.ticketrush.booking.seat.SeatInventory;
 import com.ticketrush.booking.seat.SeatRow;
 import com.ticketrush.booking.seat.SeatStatus;
-import com.ticketrush.common.contract.PaymentCommands;
-import com.ticketrush.common.contract.PaymentCommands.CreatePayment;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.outbox.OutboxWriter;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.payment.PaymentCommands;
+import com.ticketrush.contracts.payment.PaymentCommands.CreatePayment;
+import com.ticketrush.messaging.outbox.OutboxWriter;
+import com.ticketrush.web.ApiException;
 
 /**
  * Creates bookings. The Redis hold runs outside any database transaction so a flash sale's losing

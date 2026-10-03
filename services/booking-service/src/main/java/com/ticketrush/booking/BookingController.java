@@ -20,11 +20,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.ticketrush.common.web.PageResponse;
-import com.ticketrush.common.web.ApiException;
-import com.ticketrush.common.web.RequestHeaders;
 import com.ticketrush.security.Caller;
 import com.ticketrush.security.CustomerOnly;
+import com.ticketrush.web.ApiException;
+import com.ticketrush.web.PageResponse;
+import com.ticketrush.web.RequestHeaders;
 
 @RestController
 @RequestMapping("/api/bookings")

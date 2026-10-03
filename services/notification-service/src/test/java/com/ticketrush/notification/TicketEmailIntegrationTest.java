@@ -26,11 +26,11 @@ import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.TestcontainersConfiguration;
-import com.ticketrush.common.contract.TicketEvents;
-import com.ticketrush.common.contract.TicketEvents.IssuedTicket;
-import com.ticketrush.common.contract.TicketEvents.TicketsIssued;
-import com.ticketrush.common.messaging.MessageHeaders;
-import com.ticketrush.common.messaging.Topics;
+import com.ticketrush.contracts.MessageHeaders;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.ticket.TicketEvents;
+import com.ticketrush.contracts.ticket.TicketEvents.IssuedTicket;
+import com.ticketrush.contracts.ticket.TicketEvents.TicketsIssued;
 
 /** FR-NTF-01, checked against a real SMTP server (Mailpit) through its HTTP API. */
 @SpringBootTest

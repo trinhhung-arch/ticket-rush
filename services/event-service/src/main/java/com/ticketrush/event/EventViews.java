@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import com.ticketrush.common.contract.SectionSpec;
+import com.ticketrush.contracts.event.SectionSpec;
 
 /** Response bodies of the event API. */
 final class EventViews {

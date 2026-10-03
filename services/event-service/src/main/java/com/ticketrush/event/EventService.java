@@ -13,13 +13,13 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketrush.common.contract.SectionSpec;
-import com.ticketrush.common.messaging.Topics;
-import com.ticketrush.common.outbox.OutboxWriter;
-import com.ticketrush.common.seat.SeatLayout;
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.contracts.Topics;
+import com.ticketrush.contracts.event.SeatLayout;
+import com.ticketrush.contracts.event.SectionSpec;
 import com.ticketrush.event.EventViews.EventSummary;
 import com.ticketrush.event.EventViews.EventView;
+import com.ticketrush.messaging.outbox.OutboxWriter;
+import com.ticketrush.web.ApiException;
 
 @Service
 class EventService {

@@ -12,7 +12,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.springframework.stereotype.Component;
 
-import com.ticketrush.common.web.ApiException;
+import com.ticketrush.web.ApiException;
 
 /**
  * FR-PAY-04, NFR-SEC-02: a webhook carries {@code X-Webhook-Signature: t=<unix seconds>,v1=<hex>}, where

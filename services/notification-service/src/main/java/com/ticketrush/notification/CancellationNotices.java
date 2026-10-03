@@ -21,8 +21,8 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ticketrush.common.contract.BookingEvents.BookingCancelled;
-import com.ticketrush.common.contract.PaymentEvents.PaymentRefunded;
+import com.ticketrush.contracts.booking.BookingEvents.BookingCancelled;
+import com.ticketrush.contracts.payment.PaymentEvents.PaymentRefunded;
 
 /**
  * FR-NTF-02: tells the customer why a booking was cancelled and, when money had already arrived, that
