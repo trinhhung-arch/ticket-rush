@@ -310,6 +310,7 @@ scripts/                  smoke test end-to-end, đối soát cuối đợt, ki�
 - [ADR 0005: Waiting room bằng Redis sorted set, vé vào cửa là JWT](docs/adr/0005-waiting-room-in-redis-with-jwt-admission.md)
 - [ADR 0006: Keycloak cấp JWT, Gateway và từng service đều kiểm tra](docs/adr/0006-keycloak-jwt-checked-at-gateway-and-services.md)
 - [ADR 0007: Circuit breaker ở Gateway, webhook ký HMAC](docs/adr/0007-resilience-and-signed-webhooks.md)
+- [ADR 0008: Cấu trúc source: services/ và libs/, một bộ package chung, kiểm bằng ArchUnit](docs/adr/0008-source-layout-services-libs-and-package-rules.md)
 
 ## Tham khảo
 
