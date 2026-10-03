@@ -1,13 +1,14 @@
 # syntax=docker/dockerfile:1
 # One recipe for every service: docker build --build-arg MODULE=booking-service .
+# MODULE is the artifactId; every deployable module lives under services/.
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 COPY . .
 ARG MODULE
 # "locked" serialises parallel compose builds on the shared Maven cache instead of corrupting it.
 RUN --mount=type=cache,target=/root/.m2,sharing=locked \
-    ./mvnw -B -q -pl "${MODULE}" -am package -DskipTests \
-    && cp "${MODULE}"/target/"${MODULE}"-*.jar /workspace/app.jar
+    ./mvnw -B -q -pl ":${MODULE}" -am package -DskipTests \
+    && cp services/"${MODULE}"/target/"${MODULE}"-*.jar /workspace/app.jar
 
 FROM eclipse-temurin:21-jre
 # A fixed numeric user, so Kubernetes can enforce runAsNonRoot.

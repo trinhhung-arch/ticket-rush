@@ -19,16 +19,16 @@
     <description>Event ticketing backend built as microservices</description>
 
     <modules>
-        <module>observability</module>
-        <module>security</module>
-        <module>common</module>
-        <module>api-gateway</module>
-        <module>event-service</module>
-        <module>booking-service</module>
-        <module>payment-service</module>
-        <module>ticket-service</module>
-        <module>notification-service</module>
-        <module>waiting-room-service</module>
+        <module>libs/observability</module>
+        <module>libs/security</module>
+        <module>libs/common</module>
+        <module>services/api-gateway</module>
+        <module>services/event-service</module>
+        <module>services/booking-service</module>
+        <module>services/payment-service</module>
+        <module>services/ticket-service</module>
+        <module>services/notification-service</module>
+        <module>services/waiting-room-service</module>
     </modules>
 
     <properties>

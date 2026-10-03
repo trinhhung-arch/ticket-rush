@@ -274,26 +274,28 @@ JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking
 ## Cấu trúc
 
 ```
-observability/          OpenTelemetry, Prometheus, Logback gửi OTLP, cấu hình quan sát dùng chung
-security/               resource server JWT dùng chung: Caller, @CustomerOnly/@OrganizerOnly, 401/403 problem+json, OpenAPI
-common/                 service chassis dùng chung: outbox, idempotent consumer, contract message, xử lý lỗi
-api-gateway/            định tuyến, kiểm JWT, rate limit, circuit breaker, Swagger UI
-event-service/          sự kiện, khu ghế, giờ mở bán
-booking-service/        kho ghế, giữ ghế (src/main/resources/redis/*.lua), booking, điều phối saga
-payment-service/        thanh toán, cổng giả lập, webhook, hoàn tiền
-ticket-service/         vé điện tử, token QR ký HMAC
-notification-service/   email vé kèm mã QR (zxing) qua SMTP
-waiting-room-service/   hàng đợi ảo trong Redis (Lua), vé vào cửa JWT, SSE
-load-test/              kịch bản k6: flash sale, waiting room, API đọc, diễn tập sự cố
-deploy/helm/ticketrush/ Helm chart: 7 service x 2 instance, hạ tầng, Secret sinh tự động
-deploy/kind/            cụm kind 3 node và script dựng
-infra/keycloak/         realm ticketrush: vai trò, client, tài khoản demo
-infra/postgres/         tạo database và role riêng cho từng service
-infra/otel-collector/   nhận OTLP, chuyển trace sang Jaeger, log sang Loki
-infra/prometheus/       scrape và luật cảnh báo
-infra/grafana/          datasource và dashboard nạp sẵn
-docs/adr/               các quyết định kiến trúc
-scripts/                smoke test end-to-end, đối soát cuối đợt, kiểm tra bán trùng
+services/                 7 ứng dụng Spring Boot, mỗi cái một image
+  api-gateway/            định tuyến, kiểm JWT, rate limit, circuit breaker, Swagger UI
+  event-service/          sự kiện, khu ghế, giờ mở bán
+  booking-service/        kho ghế, giữ ghế (src/main/resources/redis/*.lua), booking, điều phối saga
+  payment-service/        thanh toán, cổng giả lập, webhook, hoàn tiền
+  ticket-service/         vé điện tử, token QR ký HMAC
+  notification-service/   email vé kèm mã QR (zxing) qua SMTP
+  waiting-room-service/   hàng đợi ảo trong Redis (Lua), vé vào cửa JWT, SSE
+libs/                     thư viện dùng chung, không có main class
+  observability/          OpenTelemetry, Prometheus, Logback gửi OTLP, cấu hình quan sát dùng chung
+  security/               resource server JWT dùng chung: Caller, @CustomerOnly/@OrganizerOnly, 401/403 problem+json, OpenAPI
+  common/                 service chassis dùng chung: outbox, idempotent consumer, contract message, xử lý lỗi
+load-test/                kịch bản k6: flash sale, waiting room, API đọc, diễn tập sự cố
+deploy/helm/ticketrush/   Helm chart: 7 service x 2 instance, hạ tầng, Secret sinh tự động
+deploy/kind/              cụm kind 3 node và script dựng
+infra/keycloak/           realm ticketrush: vai trò, client, tài khoản demo
+infra/postgres/           tạo database và role riêng cho từng service
+infra/otel-collector/     nhận OTLP, chuyển trace sang Jaeger, log sang Loki
+infra/prometheus/         scrape và luật cảnh báo
+infra/grafana/            datasource và dashboard nạp sẵn
+docs/adr/                 các quyết định kiến trúc
+scripts/                  smoke test end-to-end, đối soát cuối đợt, kiểm tra bán trùng
 ```
 
 ## Quyết định kiến trúc
