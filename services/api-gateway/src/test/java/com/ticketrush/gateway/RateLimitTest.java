@@ -21,28 +21,16 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
+
+import com.ticketrush.testing.RedisContainerConfiguration;
 
 /** FR-GW-02 and NFR-SEC-06 against a real Redis: 10 booking requests per second per signed-in user. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = Tokens.SECRET_PROPERTY)
-@Import(RateLimitTest.RedisContainer.class)
+@Import(RedisContainerConfiguration.class)
 class RateLimitTest {
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class RedisContainer {
-
-        @Bean
-        @ServiceConnection(name = "redis")
-        GenericContainer<?> redis() {
-            return new GenericContainer<>("redis:8-alpine").withExposedPorts(6379);
-        }
-    }
 
     private static final HttpServer BOOKING = stubReturning201();
 

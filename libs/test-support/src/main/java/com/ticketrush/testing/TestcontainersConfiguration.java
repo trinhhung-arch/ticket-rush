@@ -1,4 +1,4 @@
-package com.ticketrush;
+package com.ticketrush.testing;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+/** Postgres and Kafka for the services' integration tests, the same images as docker-compose.yml. */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 

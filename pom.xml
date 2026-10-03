@@ -24,6 +24,7 @@
         <module>libs/contracts</module>
         <module>libs/messaging</module>
         <module>libs/web</module>
+        <module>libs/test-support</module>
         <module>services/api-gateway</module>
         <module>services/event-service</module>
         <module>services/booking-service</module>
@@ -43,6 +44,7 @@
         <nimbus-jose-jwt.version>10.4</nimbus-jose-jwt.version>
         <!-- 3.0.x is built on Boot 4.0; 3.1.x already needs Boot 4.1. -->
         <springdoc.version>3.0.3</springdoc.version>
+        <archunit.version>1.5.1</archunit.version>
         <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
@@ -61,6 +63,11 @@
             <dependency>
                 <groupId>com.ticketrush</groupId>
                 <artifactId>web</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ticketrush</groupId>
+                <artifactId>test-support</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -38,7 +38,6 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.TestcontainersConfiguration;
 import com.ticketrush.contracts.MessageHeaders;
 import com.ticketrush.contracts.Topics;
 import com.ticketrush.contracts.booking.BookingEvents;
@@ -48,6 +47,7 @@ import com.ticketrush.contracts.event.EventPublished;
 import com.ticketrush.contracts.event.SectionSpec;
 import com.ticketrush.security.Caller;
 import com.ticketrush.security.Roles;
+import com.ticketrush.testing.TestcontainersConfiguration;
 import com.ticketrush.ticket.domain.CheckIn;
 import com.ticketrush.ticket.domain.TicketTokens;
 import com.ticketrush.web.ApiException;

@@ -288,6 +288,7 @@ libs/                     thư viện dùng chung, không có main class
   contracts/              message và DTO giữa các service, chia package theo service phát hành; Java thuần
   messaging/              cấu hình Kafka, transactional outbox, idempotent consumer
   web/                    lỗi problem+json, phân trang, header dùng chung cho REST API
+  test-support/           Testcontainers dùng chung và luật kiến trúc ArchUnit (chỉ scope test)
 load-test/                kịch bản k6: flash sale, waiting room, API đọc, diễn tập sự cố
 deploy/helm/ticketrush/   Helm chart: 7 service x 2 instance, hạ tầng, Secret sinh tự động
 deploy/kind/              cụm kind 3 node và script dựng

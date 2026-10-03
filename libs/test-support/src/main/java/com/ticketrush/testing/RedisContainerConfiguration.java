@@ -1,26 +1,13 @@
-package com.ticketrush;
+package com.ticketrush.testing;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.kafka.KafkaContainer;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
+/** Redis for the services that hold seats or queues in it (booking, waiting room). */
 @TestConfiguration(proxyBeanMethods = false)
-public class TestcontainersConfiguration {
-
-    @Bean
-    @ServiceConnection
-    PostgreSQLContainer postgres() {
-        return new PostgreSQLContainer("postgres:17-alpine");
-    }
-
-    @Bean
-    @ServiceConnection
-    KafkaContainer kafka() {
-        return new KafkaContainer("apache/kafka:4.1.0");
-    }
+public class RedisContainerConfiguration {
 
     @Bean
     @ServiceConnection(name = "redis")

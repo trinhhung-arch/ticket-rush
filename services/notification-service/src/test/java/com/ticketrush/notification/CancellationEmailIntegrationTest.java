@@ -23,17 +23,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.TestcontainersConfiguration;
 import com.ticketrush.contracts.MessageHeaders;
 import com.ticketrush.contracts.Topics;
 import com.ticketrush.contracts.booking.BookingEvents;
 import com.ticketrush.contracts.booking.BookingEvents.BookingCancelled;
 import com.ticketrush.contracts.payment.PaymentEvents;
 import com.ticketrush.contracts.payment.PaymentEvents.PaymentRefunded;
+import com.ticketrush.testing.TestcontainersConfiguration;
 
 /** FR-NTF-02 against Mailpit: the reason is spelled out, and a refund is reported whatever order the events come in. */
 @SpringBootTest
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, MailpitContainerConfiguration.class})
 class CancellationEmailIntegrationTest {
 
     private final HttpClient http = HttpClient.newHttpClient();

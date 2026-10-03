@@ -10,14 +10,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 
-import com.ticketrush.TestcontainersConfiguration;
+import com.ticketrush.testing.TestcontainersConfiguration;
 
 /**
  * Consumers stay on platform threads while the rest of the service uses virtual threads: on Java 21
  * a pinned consumer deadlocked this service after the host woke from sleep (common's MessagingConfig).
  */
 @SpringBootTest
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, MailpitContainerConfiguration.class})
 class KafkaConsumerThreadsTest {
 
     @Autowired

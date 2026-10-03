@@ -29,9 +29,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
-import com.ticketrush.TestcontainersConfiguration;
 import com.ticketrush.contracts.MessageHeaders;
 import com.ticketrush.contracts.Topics;
+import com.ticketrush.testing.TestcontainersConfiguration;
 
 @SpringBootTest
 @AutoConfigureMockMvc

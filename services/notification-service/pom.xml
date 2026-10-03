@@ -53,6 +53,11 @@
         </dependency>
         <dependency>
             <groupId>com.ticketrush</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.ticketrush</groupId>
             <artifactId>security</artifactId>
             <type>test-jar</type>
             <scope>test</scope>

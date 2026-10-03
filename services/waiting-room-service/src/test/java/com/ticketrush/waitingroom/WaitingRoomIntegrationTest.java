@@ -21,14 +21,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.testcontainers.containers.GenericContainer;
 
 import com.ticketrush.security.Roles;
 import com.ticketrush.security.TestJwts;
+import com.ticketrush.testing.RedisContainerConfiguration;
 import com.ticketrush.waitingroom.domain.QueueStatus;
 import com.ticketrush.waitingroom.domain.QueueStatus.State;
 import com.ticketrush.waitingroom.domain.WaitingRoom;
@@ -40,20 +37,10 @@ import com.ticketrush.waitingroom.domain.WaitingRoom;
         "ticketrush.waiting-room.admit-interval=PT0.2S",
         "ticketrush.waiting-room.token-key=" + WaitingRoomIntegrationTest.KEY,
         "ticketrush.security.load-test.secret=" + TestJwts.LOAD_TEST_SECRET})
-@Import(WaitingRoomIntegrationTest.Redis.class)
+@Import(RedisContainerConfiguration.class)
 class WaitingRoomIntegrationTest {
 
     static final String KEY = "test-admission-key-0123456789-0123456789";
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class Redis {
-
-        @Bean
-        @ServiceConnection(name = "redis")
-        GenericContainer<?> redis() {
-            return new GenericContainer<>("redis:8-alpine").withExposedPorts(6379);
-        }
-    }
 
     @Autowired
     WaitingRoom room;

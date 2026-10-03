@@ -25,16 +25,16 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.TestcontainersConfiguration;
 import com.ticketrush.contracts.MessageHeaders;
 import com.ticketrush.contracts.Topics;
 import com.ticketrush.contracts.ticket.TicketEvents;
 import com.ticketrush.contracts.ticket.TicketEvents.IssuedTicket;
 import com.ticketrush.contracts.ticket.TicketEvents.TicketsIssued;
+import com.ticketrush.testing.TestcontainersConfiguration;
 
 /** FR-NTF-01, checked against a real SMTP server (Mailpit) through its HTTP API. */
 @SpringBootTest
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, MailpitContainerConfiguration.class})
 class TicketEmailIntegrationTest {
 
     private final HttpClient http = HttpClient.newHttpClient();

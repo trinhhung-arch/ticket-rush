@@ -21,7 +21,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import tools.jackson.databind.json.JsonMapper;
 
-import com.ticketrush.TestcontainersConfiguration;
 import com.ticketrush.booking.domain.BookingService;
 import com.ticketrush.booking.domain.BookingStatus;
 import com.ticketrush.booking.domain.CreateBooking;
@@ -29,6 +28,8 @@ import com.ticketrush.contracts.MessageHeaders;
 import com.ticketrush.contracts.Topics;
 import com.ticketrush.contracts.event.EventPublished;
 import com.ticketrush.contracts.event.SectionSpec;
+import com.ticketrush.testing.RedisContainerConfiguration;
+import com.ticketrush.testing.TestcontainersConfiguration;
 
 /**
  * Shared Spring context (one set of containers) and helpers for booking-service integration tests.
@@ -38,7 +39,7 @@ import com.ticketrush.contracts.event.SectionSpec;
 @AutoConfigureMockMvc
 @AutoConfigureTracing
 @AutoConfigureMetrics
-@Import({TestcontainersConfiguration.class, StubPaymentVerifier.Config.class})
+@Import({TestcontainersConfiguration.class, RedisContainerConfiguration.class, StubPaymentVerifier.Config.class})
 abstract class BookingTestSupport {
 
     /** VIP 2x3 at 3,000,000 VND and GA 2x5 at 800,000 VND: 16 seats. */
