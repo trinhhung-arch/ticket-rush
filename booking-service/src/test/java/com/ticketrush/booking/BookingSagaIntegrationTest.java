@@ -1,9 +1,11 @@
 package com.ticketrush.booking;
 
+import static com.ticketrush.security.TestJwts.customer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -60,6 +62,29 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
                 .extractingPath("$.sold").isEqualTo(2);
         assertThatThrownBy(() -> bookingService.create(booking("binh", eventId, "VIP-A-01")))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    /**
+     * NFR-SEC-01, FR-PAY-06: a PaymentSucceeded event that payment-service does not back (a forged event
+     * on the bus) must not confirm the booking or issue a ticket. Here the booking is never marked paid.
+     */
+    @Test
+    void forgedPaymentSucceededIsRejected() {
+        UUID eventId = publishEventOnSale();
+        UUID bookingId = bookingService.create(booking("an", eventId, "VIP-A-01")).booking().id();
+        UUID paymentId = UUID.randomUUID();
+        paymentCreated(bookingId, paymentId);
+        await().atMost(WAIT).until(() -> statusOf(bookingId) == BookingStatus.AWAITING_PAYMENT);
+
+        // A forged success: never marked paid with payment-service, so verification fails.
+        send(Topics.PAYMENT_EVENTS, bookingId, UUID.randomUUID(),
+                new PaymentSucceeded(PaymentEvents.CURRENT_VERSION, UUID.randomUUID(), bookingId, 0, Instant.now()));
+
+        // Give the listener time to process and (correctly) decline to confirm.
+        await().during(Duration.ofSeconds(2)).atMost(WAIT)
+                .until(() -> statusOf(bookingId) == BookingStatus.AWAITING_PAYMENT);
+        assertThat(soldTo(eventId, "VIP-A-01")).isNull();
+        assertThat(outboxTypesFor(bookingId)).containsExactly("CreatePayment");
     }
 
     @Test
@@ -152,6 +177,7 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         UUID paymentId = UUID.randomUUID();
         paymentCreated(bookingId, paymentId);
 
+        paymentVerifier.markPaid(bookingId, paymentId);
         UUID messageId = UUID.randomUUID();
         var succeeded = new PaymentSucceeded(PaymentEvents.CURRENT_VERSION, paymentId, bookingId, 3_000_000, Instant.now());
         send(Topics.PAYMENT_EVENTS, bookingId, messageId, succeeded);
@@ -172,14 +198,14 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         UUID eventId = publishEventOnSale();
         UUID unpaid = bookingService.create(booking("oanh", eventId, "VIP-A-03")).booking().id();
 
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "oanh")).hasStatusOk()
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).with(customer("oanh"))).hasStatusOk()
                 .bodyJson().hasPathSatisfying("$.cancelReason", reason -> reason.assertThat().isEqualTo("USER_CANCELLED"));
         assertThat(outboxTypesFor(unpaid)).containsExactly("CreatePayment", "BookingCancelled", "CancelPayment");
         await().atMost(WAIT).untilAsserted(() ->
                 assertThat(bookingService.create(booking("phuong", eventId, "VIP-A-03")).created()).isTrue());
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "oanh"))
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).with(customer("oanh")))
                 .as("cancelling twice").hasStatusOk();
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).header("X-User-Id", "someone-else"))
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", unpaid).with(customer("someone-else")))
                 .hasStatus(HttpStatus.NOT_FOUND);
 
         UUID paid = bookingService.create(booking("quang", eventId, "VIP-B-01")).booking().id();
@@ -187,7 +213,7 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         paymentCreated(paid, paymentId);
         paymentSucceeded(paid, paymentId);
         await().atMost(WAIT).until(() -> statusOf(paid) == BookingStatus.CONFIRMED);
-        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", paid).header("X-User-Id", "quang"))
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", paid).with(customer("quang")))
                 .hasStatus(HttpStatus.CONFLICT);
     }
 
@@ -199,7 +225,7 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
         UUID newer = bookingService.create(booking(user, eventId, "GA-B-02")).booking().id();
         bookingService.create(booking("someone-else", eventId, "GA-B-03"));
 
-        assertThat(mvc.get().uri("/api/bookings").header("X-User-Id", user)).hasStatusOk().bodyJson()
+        assertThat(mvc.get().uri("/api/bookings").with(customer(user))).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$.totalItems", total -> total.assertThat().isEqualTo(2))
                 .hasPathSatisfying("$.items[*].id",
                         ids -> ids.assertThat().asArray().containsExactly(newer.toString(), older.toString()));
@@ -211,7 +237,9 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
                 Instant.now().plus(10, ChronoUnit.MINUTES)));
     }
 
+    /** A genuine success: payment-service's record is SUCCEEDED, so the saga's verification passes. */
     private void paymentSucceeded(UUID bookingId, UUID paymentId) {
+        paymentVerifier.markPaid(bookingId, paymentId);
         send(Topics.PAYMENT_EVENTS, bookingId, UUID.randomUUID(),
                 new PaymentSucceeded(PaymentEvents.CURRENT_VERSION, paymentId, bookingId, 800_000, Instant.now()));
     }

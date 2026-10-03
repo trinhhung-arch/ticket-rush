@@ -1,0 +1,14 @@
+# Secret scanning for CI (NFR-SEC-03): gitleaks' default rules, minus the obviously fake keys that
+# tests configure. A finding is ignored only when BOTH hold: it sits under src/test/ and the value
+# itself says it is a test value. Real credentials live in the git-ignored .env or a K8s Secret.
+title = "TicketRush"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake keys used only by tests"
+condition = "AND"
+paths = ['''(^|/)src/test/''']
+regexTarget = "secret"
+regexes = ['''^(test|gateway-test|realm-test)-[a-z0-9-]+$''']

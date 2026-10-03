@@ -1,5 +1,6 @@
 package com.ticketrush.booking;
 
+import static com.ticketrush.security.TestJwts.customer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -29,6 +30,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 import com.ticketrush.common.web.ApiException;
+import com.ticketrush.security.Roles;
+import com.ticketrush.security.TestJwts;
 
 class BookingIntegrationTest extends BookingTestSupport {
 
@@ -92,7 +95,7 @@ class BookingIntegrationTest extends BookingTestSupport {
     void replayingAnIdempotencyKeyReturnsTheSameBooking() {
         UUID eventId = publishEventOnSale();
         String body = """
-                {"eventId":"%s","seatCodes":["GA-A-01","GA-A-02"],"email":"an@example.com"}
+                {"eventId":"%s","seatCodes":["GA-A-01","GA-A-02"]}
                 """.formatted(eventId);
 
         MvcTestResult first = postBooking("an", "key-" + eventId, body);
@@ -105,9 +108,47 @@ class BookingIntegrationTest extends BookingTestSupport {
                 .hasStatusOk().bodyJson().extractingPath("$.id").isEqualTo(bookingId);
         assertThat(bookingsContaining(eventId, "GA-A-01")).isEqualTo(1);
 
-        assertThat(mvc.post().uri("/api/bookings").header("X-User-Id", "an")
+        assertThat(mvc.post().uri("/api/bookings").with(customer("an"))
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .as("missing Idempotency-Key").hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    /** FR-IAM-01: holding seats needs a customer token; the booking is tied to the token's subject and email. */
+    @Test
+    void bookingNeedsACustomerToken() {
+        UUID eventId = publishEventOnSale();
+        String body = """
+                {"eventId":"%s","seatCodes":["GA-B-05"]}
+                """.formatted(eventId);
+
+        assertThat(mvc.post().uri("/api/bookings").header("Idempotency-Key", "anon-" + eventId)
+                .contentType(MediaType.APPLICATION_JSON).content(body)).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.post().uri("/api/bookings").with(TestJwts.as("olivia", Roles.ORGANIZER))
+                .header("Idempotency-Key", "org-" + eventId).contentType(MediaType.APPLICATION_JSON).content(body))
+                .hasStatus(HttpStatus.FORBIDDEN);
+
+        MvcTestResult created = postBooking("vy", "vy-" + eventId, body);
+        assertThat(created).hasStatus(HttpStatus.CREATED);
+        String bookingId = JsonPath.read(content(created), "$.id");
+        assertThat(jdbc.sql("select user_id || ' ' || email from booking where id = :id")
+                .param("id", UUID.fromString(bookingId)).query(String.class).single())
+                .isEqualTo("vy vy@example.com");
+        assertThat(mvc.get().uri("/api/bookings/{id}", bookingId).with(customer("someone-else")))
+                .as("other customers cannot see it").hasStatus(HttpStatus.NOT_FOUND);
+    }
+
+    /** NFR-SEC-01: tickets go to the account's email, so an unverified address cannot book (BIZ-12). */
+    @Test
+    void bookingNeedsAVerifiedEmail() {
+        UUID eventId = publishEventOnSale();
+        String body = """
+                {"eventId":"%s","seatCodes":["GA-A-01"]}
+                """.formatted(eventId);
+        assertThat(mvc.post().uri("/api/bookings").with(TestJwts.unverifiedCustomer("mallory"))
+                .header("Idempotency-Key", "unverified-" + eventId)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(bookingsContaining(eventId, "GA-A-01")).isEqualTo(0);
     }
 
     /** FR-BKG-01: held seats show up as HELD without being written to the database. */
@@ -143,7 +184,7 @@ class BookingIntegrationTest extends BookingTestSupport {
         assertThat(bookingService.create(booking("someone-else", eventId, "GA-B-03")).created())
                 .as("the rejected request released its hold").isTrue();
 
-        mvc.post().uri("/api/bookings/{id}/cancel", two).header("X-User-Id", user).exchange();
+        mvc.post().uri("/api/bookings/{id}/cancel", two).with(customer(user)).exchange();
         assertThat(bookingService.create(booking(user, eventId, "GA-B-04", "GA-B-05")).created()).isTrue();
     }
 
@@ -235,7 +276,7 @@ class BookingIntegrationTest extends BookingTestSupport {
 
 
     private MvcTestResult postBooking(String user, String idempotencyKey, String body) {
-        return mvc.post().uri("/api/bookings").header("X-User-Id", user).header("Idempotency-Key", idempotencyKey)
+        return mvc.post().uri("/api/bookings").with(customer(user)).header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON).content(body).exchange();
     }
 

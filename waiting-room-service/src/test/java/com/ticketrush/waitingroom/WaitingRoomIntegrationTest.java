@@ -27,6 +27,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.GenericContainer;
 
+import com.ticketrush.security.Roles;
+import com.ticketrush.security.TestJwts;
 import com.ticketrush.waitingroom.QueueStatus.State;
 
 /** One place in the room and 2-second admissions, so the queue moves within the test. */
@@ -34,7 +36,8 @@ import com.ticketrush.waitingroom.QueueStatus.State;
         "ticketrush.waiting-room.capacity=1",
         "ticketrush.waiting-room.admission-ttl=PT2S",
         "ticketrush.waiting-room.admit-interval=PT0.2S",
-        "ticketrush.waiting-room.token-key=" + WaitingRoomIntegrationTest.KEY})
+        "ticketrush.waiting-room.token-key=" + WaitingRoomIntegrationTest.KEY,
+        "ticketrush.security.load-test.secret=" + TestJwts.LOAD_TEST_SECRET})
 @Import(WaitingRoomIntegrationTest.Redis.class)
 class WaitingRoomIntegrationTest {
 
@@ -98,9 +101,15 @@ class WaitingRoomIntegrationTest {
         room.join(eventId, "hoa");
         room.join(eventId, "khoa");
 
+        URI stream = URI.create("http://localhost:" + port + "/api/queue/events/" + eventId + "/stream");
+        assertThat(HttpClient.newHttpClient().send(HttpRequest.newBuilder(stream).build(),
+                HttpResponse.BodyHandlers.discarding()).statusCode()).as("no token").isEqualTo(401);
+
         HttpResponse<Stream<String>> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/queue/events/" + eventId + "/stream"))
-                        .header("X-User-Id", "khoa").timeout(Duration.ofSeconds(20)).build(),
+                HttpRequest.newBuilder(stream)
+                        .header("Authorization", TestJwts.bearer(TestJwts.loadTestToken(TestJwts.LOAD_TEST_SECRET, "khoa",
+                                Roles.CUSTOMER)))
+                        .timeout(Duration.ofSeconds(20)).build(),
                 HttpResponse.BodyHandlers.ofLines());
         List<String> data = response.body().filter(line -> line.startsWith("data:")).toList();
 

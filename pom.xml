@@ -20,6 +20,7 @@
 
     <modules>
         <module>observability</module>
+        <module>security</module>
         <module>common</module>
         <module>api-gateway</module>
         <module>event-service</module>
@@ -36,8 +37,11 @@
         <zxing.version>3.5.4</zxing.version>
         <!-- Must match the OpenTelemetry SDK that Spring Boot manages (1.55.0 for Boot 4.0.x). -->
         <opentelemetry-instrumentation.version>2.21.0-alpha</opentelemetry-instrumentation.version>
-        <!-- Same version Spring Security 7.0 (oauth2-jose) uses, so phase 5 brings no conflict. -->
+        <!-- Same version Spring Security 7.0 (oauth2-jose) uses. -->
         <nimbus-jose-jwt.version>10.4</nimbus-jose-jwt.version>
+        <!-- 3.0.x is built on Boot 4.0; 3.1.x already needs Boot 4.1. -->
+        <springdoc.version>3.0.3</springdoc.version>
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -53,6 +57,18 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.ticketrush</groupId>
+                <artifactId>security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ticketrush</groupId>
+                <artifactId>security</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
                 <groupId>io.opentelemetry.instrumentation</groupId>
                 <artifactId>opentelemetry-logback-appender-1.0</artifactId>
                 <version>${opentelemetry-instrumentation.version}</version>
@@ -61,6 +77,16 @@
                 <groupId>com.nimbusds</groupId>
                 <artifactId>nimbus-jose-jwt</artifactId>
                 <version>${nimbus-jose-jwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+                <version>${springdoc.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.zxing</groupId>
@@ -76,4 +102,38 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <!-- Coverage for every module: target/site/jacoco/index.html after ./mvnw verify (NFR-TEST-01). -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

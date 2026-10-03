@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -22,16 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.ticketrush.common.web.PageResponse;
+import com.ticketrush.common.web.ApiException;
 import com.ticketrush.common.web.RequestHeaders;
+import com.ticketrush.security.Caller;
+import com.ticketrush.security.CustomerOnly;
 
 @RestController
 @RequestMapping("/api/bookings")
+@CustomerOnly
 class BookingController {
 
+    /** Tickets go to the email on the caller's account, not to an address typed into the request. */
     record CreateBookingRequest(
             @NotNull UUID eventId,
-            @NotEmpty @Size(max = 6) List<@NotBlank String> seatCodes,
-            @NotBlank @Email String email) {
+            @NotEmpty @Size(max = 6) List<@NotBlank String> seatCodes) {
     }
 
     private final BookingService bookings;
@@ -44,13 +47,21 @@ class BookingController {
 
     /** 201 for a new booking, 200 when the same Idempotency-Key is replayed. */
     @PostMapping
-    ResponseEntity<BookingView> create(@RequestHeader(RequestHeaders.USER_ID) String userId,
+    ResponseEntity<BookingView> create(Caller caller,
                                        @RequestHeader(RequestHeaders.IDEMPOTENCY_KEY) @Size(min = 8, max = 100) String idempotencyKey,
                                        @RequestHeader(value = AdmissionTokens.HEADER, required = false) String admissionToken,
                                        @Valid @RequestBody CreateBookingRequest request,
                                        UriComponentsBuilder uri) {
+        if (caller.email() == null) {
+            throw ApiException.unprocessable("The account has no email address to send the tickets to");
+        }
+        // Tickets (with their QR codes) are emailed to the account's address, so it must be a confirmed one;
+        // otherwise a self-registered, unverified address could receive someone else's tickets (NFR-SEC-01).
+        if (!caller.emailVerified()) {
+            throw ApiException.forbidden("Verify your email address before booking; tickets are sent there");
+        }
         BookingService.Result result = bookings.create(new CreateBooking(
-                userId, idempotencyKey, request.eventId(), request.seatCodes(), request.email(), admissionToken));
+                caller.id(), idempotencyKey, request.eventId(), request.seatCodes(), caller.email(), admissionToken));
         if (!result.created()) {
             return ResponseEntity.ok(result.booking());
         }
@@ -59,19 +70,18 @@ class BookingController {
 
     /** The caller's bookings, newest first, with cancel reasons (FR-BKG-08). */
     @GetMapping
-    PageResponse<BookingView> mine(@RequestHeader(RequestHeaders.USER_ID) String userId,
-                                   @PageableDefault(size = 20) Pageable pageable) {
-        return PageResponse.of(bookings.listForUser(userId, pageable));
+    PageResponse<BookingView> mine(Caller caller, @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponse.of(bookings.listForUser(caller.id(), pageable));
     }
 
     /** FR-BKG-06: give up an unpaid booking; its seats are released at once. */
     @PostMapping("/{id}/cancel")
-    BookingView cancel(@RequestHeader(RequestHeaders.USER_ID) String userId, @PathVariable UUID id) {
-        return saga.cancelByCustomer(id, userId);
+    BookingView cancel(Caller caller, @PathVariable UUID id) {
+        return saga.cancelByCustomer(id, caller.id());
     }
 
     @GetMapping("/{id}")
-    BookingView get(@RequestHeader(RequestHeaders.USER_ID) String userId, @PathVariable UUID id) {
-        return bookings.get(id, userId);
+    BookingView get(Caller caller, @PathVariable UUID id) {
+        return bookings.get(id, caller.id());
     }
 }

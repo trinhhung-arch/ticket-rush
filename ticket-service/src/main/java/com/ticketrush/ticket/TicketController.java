@@ -4,14 +4,20 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ticketrush.common.web.RequestHeaders;
+import com.ticketrush.security.Caller;
+import com.ticketrush.security.CustomerOnly;
+import com.ticketrush.security.OrganizerOnly;
 
 /** Customers see only their own tickets (FR-TKT-02). The app renders {@code qrToken} as the QR code. */
 @RestController
@@ -27,19 +33,31 @@ class TicketController {
         }
     }
 
-    private final TicketRepository tickets;
+    record CheckInRequest(@NotNull UUID eventId, @NotBlank String qrToken) {
+    }
 
-    TicketController(TicketRepository tickets) {
+    private final TicketRepository tickets;
+    private final CheckIn checkIn;
+
+    TicketController(TicketRepository tickets, CheckIn checkIn) {
         this.tickets = tickets;
+        this.checkIn = checkIn;
     }
 
     @GetMapping
+    @CustomerOnly
     @Transactional(readOnly = true)
-    List<TicketView> mine(@RequestHeader(RequestHeaders.USER_ID) String userId,
-                          @RequestParam(required = false) UUID bookingId) {
+    List<TicketView> mine(Caller caller, @RequestParam(required = false) UUID bookingId) {
         List<Ticket> found = bookingId == null
-                ? tickets.findByUserIdOrderByStartsAtAscSeatCodeAsc(userId)
-                : tickets.findByUserIdAndBookingIdOrderBySeatCode(userId, bookingId);
+                ? tickets.findByUserIdOrderByStartsAtAscSeatCodeAsc(caller.id())
+                : tickets.findByUserIdAndBookingIdOrderBySeatCode(caller.id(), bookingId);
         return found.stream().map(TicketView::of).toList();
+    }
+
+    /** FR-TKT-03: 200 ADMITTED once; a second scan gets 409 ALREADY_USED with the first check-in time. */
+    @PostMapping("/check-in")
+    @OrganizerOnly
+    CheckIn.Admitted checkIn(Caller staff, @Valid @RequestBody CheckInRequest request) {
+        return checkIn.scan(staff, request.eventId(), request.qrToken());
     }
 }

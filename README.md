@@ -3,17 +3,19 @@
 [![CI](https://github.com/trinhhung-arch/ticket-rush/actions/workflows/ci.yml/badge.svg)](https://github.com/trinhhung-arch/ticket-rush/actions/workflows/ci.yml)
 
 Backend bán vé sự kiện dạng microservice, chịu được đợt mở bán đột biến mà **không bán trùng ghế**.
-Java 21 · Spring Boot 4 · Spring Cloud Gateway · Kafka · Redis · PostgreSQL · Testcontainers · Docker Compose.
+Java 21 · Spring Boot 4 · Spring Cloud Gateway · Keycloak · Kafka · Redis · PostgreSQL · Resilience4j · OpenTelemetry · Testcontainers · Docker Compose · Helm/Kubernetes.
 
 > Flash sale 1.000 request/giây trong 5 phút vào sự kiện 5.000 ghế: giữ ghế p95 **10 ms**, 0 lỗi, **0 ghế bán trùng**.
 > Xoá sạch Redis giữa đợt bán: vẫn 0 ghế bán trùng, 2.616/2.616 người trả tiền thừa được hoàn.
-> Chi tiết và những gì đo tải đã tìm ra: [báo cáo đo tải](docs/load-test-report.md).
+> Tắt Payment 2 phút hoặc Kafka 60 giây giữa lúc mở bán: giữ ghế không lỗi trong lúc sự cố, 0 event mất, đối soát 4 database khớp hoàn toàn.
+> Chi tiết và những gì đo tải, diễn tập sự cố đã tìm ra: [báo cáo](docs/load-test-report.md). Kịch bản video demo: [docs/demo.md](docs/demo.md).
 
 ## Kiến trúc
 
 ```mermaid
 flowchart TB
-    client[Client: web, mobile, k6] -->|HTTPS| gw[API Gateway<br/>Spring Cloud Gateway]
+    client[Client: web, mobile, k6] -->|đăng nhập OIDC| kc[Keycloak]
+    client -->|HTTPS + JWT| gw[API Gateway<br/>kiểm JWT, rate limit, circuit breaker]
     gw -->|REST| event[Event Service<br/>event_db]
     gw -->|REST| waiting[Waiting Room<br/>Redis]
     gw -->|REST| booking[Booking Service<br/>giữ ghế Redis Lua, điều phối saga<br/>booking_db]
@@ -26,6 +28,7 @@ flowchart TB
     kafka --> notification[Notification Service<br/>Mailpit]
 ```
 
+- Gateway và từng service đều tự kiểm JWT do Keycloak cấp; vai trò được kiểm ở từng endpoint ([ADR 0006](docs/adr/0006-keycloak-jwt-checked-at-gateway-and-services.md)).
 - Mỗi service có database riêng và một role Postgres riêng; không service nào đọc database của service khác.
 - Service không gọi Kafka trực tiếp: message được ghi vào bảng outbox cùng transaction với dữ liệu, rồi relay đẩy lên Kafka.
 - Consumer ghi `message-id` đã xử lý để bỏ qua message lặp.
@@ -45,7 +48,7 @@ sequenceDiagram
     C->>B: POST /api/bookings: giữ ghế bằng Redis Lua
     B-)P: CreatePayment
     P-)B: PaymentCreated (checkoutUrl), booking AWAITING_PAYMENT
-    C->>P: thanh toán qua cổng giả lập, cổng gọi webhook
+    C->>P: thanh toán qua cổng giả lập, cổng gửi webhook ký HMAC
     P-)B: PaymentSucceeded
     Note over B: khoá dòng ghế, update có điều kiện sang SOLD, CONFIRMED
     B-)T: BookingConfirmed
@@ -57,7 +60,7 @@ sequenceDiagram
 |---|---|
 | Hết 10 phút chưa trả tiền | Tác vụ quét mỗi 5 giây huỷ booking (HOLD_EXPIRED), nhả ghế, gửi `CancelPayment` |
 | Thẻ bị từ chối | `PaymentFailed` → huỷ booking (PAYMENT_FAILED), nhả ghế ngay |
-| Tiền về sau khi booking đã huỷ | Booking gửi `RefundPayment`, Payment hoàn tiền và phát `PaymentRefunded` |
+| Tiền về sau khi booking đã huỷ | Booking gửi `RefundPayment`, Payment hoàn tiền và phát `PaymentRefunded`; khách nhận email hoàn tiền |
 | Redis mất khoá, hai người cùng trả tiền một ghế | Update có điều kiện trong Postgres chỉ bán cho người đầu; người sau bị huỷ (SEAT_CONFLICT) và được hoàn tiền |
 | Message hoặc webhook gửi lặp | Consumer bỏ qua `message-id` đã xử lý; payment chỉ đổi trạng thái khi còn PENDING |
 
@@ -69,13 +72,13 @@ sequenceDiagram
 | 2. Saga và thanh toán | Saga đặt vé, Payment với cổng giả lập, hết hạn giữ ghế, hoàn tiền, vé QR, email | Xong |
 | 3. Quan sát | Trace xuyên Kafka và outbox (Jaeger), log theo trace (Loki), metric nghiệp vụ và cảnh báo (Prometheus, Grafana) | Xong |
 | 4. Chịu tải | Waiting room, rate limit, khách tự huỷ, giới hạn 6 vé, đo tải k6 | Xong |
-| 5. Bảo mật và triển khai | Keycloak, Resilience4j, Helm, Kubernetes | Chưa làm |
+| 5. Bảo mật và triển khai | Keycloak và JWT, webhook ký HMAC, check-in QR, email huỷ/hoàn tiền, circuit breaker, OpenAPI, gitleaks, JaCoCo, image trong CI, Helm trên kind | Xong |
 
 Mã yêu cầu (FR-…, NFR-…) trong code và test tham chiếu tới tài liệu FR/NFR của project.
 
 ## Chạy thử
 
-Cần Docker (Docker Desktop hoặc OrbStack), `curl` và `jq`.
+Cần Docker (Docker Desktop hoặc OrbStack), `curl`, `jq` và `openssl`.
 
 ```bash
 ./scripts/init-dev-env.sh
@@ -83,17 +86,23 @@ docker compose up -d --build
 ./scripts/smoke-test.sh
 ```
 
-`init-dev-env.sh` sinh file `.env` (đã nằm trong `.gitignore`) với mật khẩu database và khoá ký QR ngẫu nhiên,
-nên repo không chứa mật khẩu nào (NFR-SEC-03). Thiếu `.env` thì Compose dừng ngay và báo cần chạy script.
-Service chạy từ IDE cũng tự đọc `.env` ở thư mục gốc.
+`init-dev-env.sh` sinh file `.env` (đã nằm trong `.gitignore`) với mật khẩu database, khoá ký QR, secret webhook,
+mật khẩu admin Keycloak và mật khẩu các tài khoản demo, tất cả ngẫu nhiên, nên repo không chứa mật khẩu nào (NFR-SEC-03).
+Thiếu `.env` thì Compose dừng ngay và báo cần chạy script. Service chạy từ IDE cũng tự đọc `.env` ở thư mục gốc.
 
-Script đi trọn luồng qua Gateway: tạo và công bố sự kiện, giữ ghế, gửi lại cùng `Idempotency-Key`,
-thanh toán qua cổng giả lập, chờ booking CONFIRMED, lấy vé QR và kiểm tra email trong Mailpit;
-một khách bị từ chối thẻ và ghế được nhả lại; một sự kiện có waiting room; và một bot bị rate limit chặn.
+Script đăng nhập các tài khoản demo qua Keycloak rồi đi trọn luồng qua Gateway: gọi thiếu token hoặc sai vai trò bị từ chối;
+tạo và công bố sự kiện; giữ ghế và gửi lại cùng `Idempotency-Key`; webhook không ký hoặc ký sai bị 401;
+thanh toán, chờ CONFIRMED, lấy vé QR và email trong Mailpit; ban tổ chức quét QR, lần hai bị báo đã dùng;
+một khách bị từ chối thẻ, ghế được nhả lại và khách nhận email ghi lý do; một sự kiện có waiting room; và rate limit.
+
+Tài khoản demo (mật khẩu là `DEMO_USER_PASSWORD` trong `.env`): `organizer@ticketrush.dev` (ORGANIZER),
+`admin@ticketrush.dev` (ADMIN), `alice@`, `bob@`, `chi@`, `dung@ticketrush.dev` (CUSTOMER). Tài khoản tự đăng ký nhận CUSTOMER.
 
 | Địa chỉ | Dùng để |
 |---|---|
 | http://localhost:8080 | API Gateway, cổng vào duy nhất |
+| http://localhost:8080/swagger-ui.html | Swagger UI cho mọi service; nút Authorize đăng nhập Keycloak (PKCE) |
+| http://localhost:8180 | Keycloak, realm `ticketrush` (admin: `admin` / `KEYCLOAK_ADMIN_PASSWORD`) |
 | http://localhost:8090 | Kafka UI: xem topic `event.events` và các topic `-dlt` |
 | http://localhost:8025 | Mailpit: hộp thư test, xem email vé kèm mã QR |
 | http://localhost:3000 | Grafana: dashboard "TicketRush: tổng quan", không cần đăng nhập |
@@ -101,6 +110,31 @@ một khách bị từ chối thẻ và ghế được nhả lại; một sự k
 | http://localhost:9090/alerts | Prometheus: 4 luật cảnh báo |
 
 Postgres (15432), Redis (16379) và Kafka (9094) cũng được mở ra máy host, ở cổng khác mặc định để không đụng database khác trên máy; chạy một service từ IDE là tự kết nối vào stack này. Nếu cổng 8080 đã bận, sinh `.env` bằng `GATEWAY_PORT=18080 ./scripts/init-dev-env.sh` và gọi `GATEWAY=http://localhost:18080 ./scripts/smoke-test.sh`.
+
+## Chạy trên Kubernetes
+
+Cần thêm `kind`, `helm` và `kubectl`. Helm chart nằm ở `deploy/helm/ticketrush`, cài lên cụm kind 3 node (NFR-DEP-03):
+
+```bash
+./deploy/kind/up.sh          # tạo cụm, build và nạp image, helm install, chờ mọi pod sẵn sàng
+./deploy/kind/pod-drills.sh  # xoá pod, kill pod, rolling restart trong lúc có tải
+./deploy/kind/down.sh
+```
+
+- Mỗi service chạy **2 instance**, ưu tiên nằm trên 2 node khác nhau.
+- Mỗi service có readiness/liveness/startup probe, PodDisruptionBudget, `preStop` 5 giây và graceful shutdown.
+- Mật khẩu và khoá được **sinh ngẫu nhiên thành K8s Secret** khi cài lần đầu, và được giữ nguyên khi `helm upgrade`.
+- Postgres, Redis, Kafka, Keycloak và Mailpit cài kèm trong chart. Khi lên môi trường thật thì tắt bằng `infrastructure.enabled=false` và dùng dịch vụ managed.
+- Gateway ở http://localhost:28080, Keycloak ở :28180, Mailpit ở :28025. Smoke test chạy được nguyên trên cụm này (lệnh in ra cuối `up.sh`).
+
+Diễn tập trên cụm kind, tải đọc đều 100 request/giây (NFR-AVAIL-04, NFR-AVAIL-06):
+
+| Sự cố | Request lỗi |
+|---|---|
+| Xoá 1 pod booking-service (dừng êm) | 0 |
+| Kill 1 pod event-service (`--grace-period=0`, như crash) | 0 |
+| Rolling restart booking-service | 0 |
+| Tổng | **0 / 10.000**, p99 22 ms |
 
 ## Kết quả đo tải
 
@@ -112,8 +146,16 @@ Postgres (15432), Redis (16379) và Kafka (9094) cũng được mở ra máy hos
 | Trả tiền tới CONFIRMED (NFR-PERF-04) | p95 ≤ 3 s | p95 0,35 s |
 | Danh sách sự kiện / sơ đồ 5.000 ghế (NFR-PERF-03) | p95 ≤ 150 / 300 ms | p95 6,3 / 10,8 ms |
 | 50.000 người vào waiting room trong 1 phút (NFR-PERF-05) | chịu được | p95 2,8 ms, đúng 2.000 người được vào |
+| Tắt Payment 2 phút giữa lúc có tải (NFR-AVAIL-01) | giữ ghế vẫn chạy, về trạng thái cuối ≤ 60 s | 0 request giữ ghế lỗi trong lúc sự cố; 2.648 booking bị treo đều CONFIRMED trong 46 s |
+| Tắt Kafka 60 giây (NFR-CORR-02) | 0 event mất | 0 mất; 0 request giữ ghế lỗi; đối soát khớp hoàn toàn |
+| Xoá, kill, rolling restart pod trên Kubernetes (NFR-AVAIL-04) | lỗi ≤ 1 s | 0 / 10.000 request lỗi |
 
-Đo trên một laptop 10 CPU, k6 và 17 container chạy chung máy. Lần đo đầu cho kết quả kém (p95 227 ms, saga 21 s). Năm chỗ nghẽn đã được tìm ra bằng metric và timestamp trong DB rồi sửa; xem [báo cáo](docs/load-test-report.md).
+Đo trên một laptop 10 CPU, k6 và 17 container chạy chung máy.
+- **Đo tải:** lần đầu cho kết quả kém (p95 227 ms, saga 21 s). Năm chỗ nghẽn được tìm ra bằng metric và timestamp trong DB rồi sửa.
+- **Diễn tập sự cố:** lần đầu cũng không đạt. Năm nguyên nhân được tìm ra và sửa: một bulkhead ngầm của Spring Cloud, hàng đợi accept của Tomcat, consumer KIP-848 chiếm CPU khi mất broker, rebalance chờ 5 phút, pool DB nhỏ hơn số luồng consumer.
+- **Sau khi máy ngủ dậy:** notification-service bị deadlock vì consumer Kafka chạy trên virtual thread bị pin vào carrier (Java 21). Consumer giờ chạy trên platform thread.
+
+Chi tiết trong [báo cáo](docs/load-test-report.md).
 
 ## Quan sát
 
@@ -139,27 +181,48 @@ Chạy service từ IDE mà muốn gửi trace và log vào stack Compose thì �
 
 ## API
 
-Danh tính người gọi tạm lấy từ header `X-User-Id`; Keycloak thay thế ở giai đoạn 5.
-Mọi lỗi trả về dạng `application/problem+json` (RFC 9457).
+Mô tả OpenAPI đầy đủ ở Swagger UI của Gateway (`/swagger-ui.html`). Gọi API cần access token của Keycloak:
 
-| Method | Đường dẫn | Service | Yêu cầu |
+```bash
+set -a; . ./.env; set +a
+TOKEN=$(curl -s http://localhost:8180/realms/ticketrush/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=ticketrush-cli -d username=alice@ticketrush.dev \
+  --data-urlencode "password=$DEMO_USER_PASSWORD" | jq -r .access_token)
+curl -s http://localhost:$GATEWAY_PORT/api/bookings -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi trả về dạng `application/problem+json` (RFC 9457).
+
+| Method | Đường dẫn | Vai trò | Yêu cầu |
 |---|---|---|---|
-| POST | `/api/events` | event | FR-EVT-01: tạo sự kiện nháp |
-| PUT | `/api/events/{id}` | event | Sửa khi còn nháp; đã công bố thì 409 |
-| POST | `/api/events/{id}/publish` | event | FR-EVT-02: công bố, phát `EventPublished` |
-| GET | `/api/events?city=&from=&to=&page=&size=` | event | FR-EVT-03: tối đa 50 mục một trang |
-| GET | `/api/events/{id}` | event | FR-EVT-04 |
-| GET | `/api/events/{id}/seats` | booking | FR-BKG-01: sơ đồ ghế AVAILABLE / HELD / SOLD |
-| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | booking | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; rate limit 10 req/s mỗi người (FR-GW-02) |
-| POST | `/api/bookings/{id}/cancel` | booking | FR-BKG-06: khách tự huỷ booking chưa thanh toán |
-| GET | `/api/bookings` | booking | FR-BKG-08: booking của tôi, mới nhất trước, kèm lý do huỷ |
-| GET | `/api/bookings/{id}` | booking | Trạng thái và `checkoutUrl`; chỉ chủ booking xem được |
-| POST | `/api/payments/{id}/checkout` | payment | FR-PAY-02: cổng giả lập, body `{"outcome":"SUCCEEDED"}` hoặc `DECLINED` |
-| POST | `/api/payments/webhooks/mock-gateway` | payment | FR-PAY-03: webhook, gửi lặp vẫn an toàn |
-| GET | `/api/payments/{id}`, `/api/payments?bookingId=` | payment | Chỉ chủ thanh toán xem được |
-| GET | `/api/tickets?bookingId=` | ticket | FR-TKT-02: vé của tôi, `qrToken` để app vẽ mã QR |
-| POST | `/api/queue/events/{id}/join` | waiting-room | FR-WR-01: vào ngay nếu còn chỗ, không thì nhận vị trí; khi vào được thì có `admissionToken` |
-| GET | `/api/queue/events/{id}/status`, `/stream` (SSE) | waiting-room | FR-WR-02: vị trí và thời gian chờ ước tính, đẩy mỗi 2 giây |
+| POST | `/api/events` | ORGANIZER | FR-EVT-01: tạo sự kiện nháp |
+| PUT | `/api/events/{id}` | ORGANIZER, chủ sự kiện | Sửa khi còn nháp; đã công bố thì 409 |
+| POST | `/api/events/{id}/publish` | ORGANIZER, chủ sự kiện | FR-EVT-02: công bố, phát `EventPublished` |
+| GET | `/api/events?city=&from=&to=&page=&size=` | công khai | FR-EVT-03: tối đa 50 mục một trang |
+| GET | `/api/events/{id}` | công khai | FR-EVT-04; bản nháp chỉ chủ sự kiện thấy |
+| GET | `/api/events/{id}/seats` | công khai | FR-BKG-01: sơ đồ ghế AVAILABLE / HELD / SOLD |
+| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | CUSTOMER | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; vé gửi tới email của tài khoản; rate limit 10 req/s mỗi người (FR-GW-02) |
+| POST | `/api/bookings/{id}/cancel` | CUSTOMER, chủ booking | FR-BKG-06: khách tự huỷ booking chưa thanh toán |
+| GET | `/api/bookings` | CUSTOMER | FR-BKG-08: booking của tôi, mới nhất trước, kèm lý do huỷ |
+| GET | `/api/bookings/{id}` | CUSTOMER, chủ booking | Trạng thái và `checkoutUrl` |
+| POST | `/api/payments/{id}/checkout` | công khai (trang của cổng thanh toán) | FR-PAY-02: cổng giả lập, body `{"outcome":"SUCCEEDED"}` hoặc `DECLINED` |
+| POST | `/api/payments/webhooks/mock-gateway` | chữ ký `X-Webhook-Signature` | FR-PAY-03, FR-PAY-04: HMAC-SHA256 trên timestamp và body; sai chữ ký hoặc cũ hơn 5 phút thì 401 |
+| GET | `/api/payments/{id}`, `/api/payments?bookingId=` | CUSTOMER, chủ thanh toán | |
+| GET | `/api/tickets?bookingId=` | CUSTOMER | FR-TKT-02: vé của tôi, `qrToken` để app vẽ mã QR |
+| POST | `/api/tickets/check-in` body `{"eventId", "qrToken"}` | ORGANIZER của sự kiện, ADMIN | FR-TKT-03: 200 ADMITTED lần đầu; 409 ALREADY_USED kèm giờ check-in lần đầu |
+| POST | `/api/queue/events/{id}/join` | CUSTOMER | FR-WR-01: vào ngay nếu còn chỗ, không thì nhận vị trí; khi vào được thì có `admissionToken` |
+| GET | `/api/queue/events/{id}/status`, `/stream` (SSE) | CUSTOMER | FR-WR-02: vị trí và thời gian chờ ước tính, đẩy mỗi 2 giây |
+
+## Bảo mật và độ bền
+
+| Yêu cầu | Cách làm |
+|---|---|
+| Xác thực, phân quyền (FR-IAM-01, NFR-SEC-01) | Keycloak cấp JWT với `aud=ticketrush-api` và claim `roles`. Gateway từ chối sớm token không hợp lệ; mỗi service tự kiểm chữ ký, issuer, audience, hạn và vai trò. Vai trò được kiểm trước khi đọc body. |
+| Webhook (FR-PAY-04, NFR-SEC-02) | `X-Webhook-Signature: t=…,v1=HMAC-SHA256(secret, "t.body")`, so sánh thời gian hằng, cửa sổ 5 phút ([ADR 0007](docs/adr/0007-resilience-and-signed-webhooks.md)) |
+| Không lộ bí mật (NFR-SEC-03) | `.env` sinh ngẫu nhiên, K8s Secret sinh khi cài chart; gitleaks quét toàn bộ lịch sử Git trong CI |
+| Vé QR (NFR-SEC-04) | Token chỉ chứa id vé và HMAC, không có dữ liệu cá nhân; check-in chỉ cho đúng ban tổ chức, mỗi vé một lần |
+| Lời gọi đồng bộ (NFR-AVAIL-02) | Resilience4j ở Gateway: timeout 2 giây, mỗi service một circuit breaker, mở khi ≥ 50% lỗi trong 20 lời gọi; trả 503/504 dạng problem+json |
+| Tắt êm (NFR-AVAIL-06) | Graceful shutdown 30 giây; trên Kubernetes thêm `preStop` 5 giây và `terminationGracePeriodSeconds` 40 |
 
 ## Test
 
@@ -167,7 +230,11 @@ Mọi lỗi trả về dạng `application/problem+json` (RFC 9457).
 ./mvnw verify
 ```
 
-Integration test chạy với Postgres, Kafka và Redis thật qua Testcontainers.
+Integration test chạy với Postgres, Kafka, Redis, Mailpit và Keycloak thật qua Testcontainers.
+CI (`.github/workflows/ci.yml`) chạy song song gitleaks trên toàn bộ lịch sử Git, `helm lint` và `./mvnw verify`, rồi build image của 7 service (push lên GHCR khi merge vào main).
+
+JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking-service và payment-service làm build thất bại nếu
+độ phủ dòng hoặc nhánh dưới 70% (NFR-TEST-01). Hiện tại: booking 95% dòng, 79% nhánh; payment 94% dòng, 78% nhánh.
 
 | Test | Kiểm chứng |
 |---|---|
@@ -193,27 +260,40 @@ Integration test chạy với Postgres, Kafka và Redis thật qua Testcontainer
 | `BookingSagaIntegrationTest.customerCanCancelAnUnpaidBookingButNotAPaidOne` | FR-BKG-06 |
 | `WaitingRoomIntegrationTest` | FR-WR-01, 02, 03: FIFO, SSE, JWT |
 | `RateLimitTest` | FR-GW-02, NFR-SEC-06 với Redis thật |
-| `RoutingTest` | FR-GW-01 |
+| `RoutingTest` | FR-GW-01; NFR-SEC-01: thiếu token, token ký sai khoá đều 401 ở Gateway |
+| `KeycloakRealmTest` | FR-IAM-01 với Keycloak thật: realm, vai trò mặc định CUSTOMER, audience |
+| `ResourceServerTest` | NFR-SEC-01, 05: 401/403 dạng problem+json, vai trò kiểm trước khi validate body, OpenAPI |
+| `EventApiIntegrationTest.onlyOrganizersChangeTheCatalogue` | FR-IAM-01: customer tạo sự kiện bị 403 |
+| `BookingIntegrationTest.bookingNeedsACustomerToken` | FR-IAM-01: booking gắn với `sub` và email của token |
+| `PaymentIntegrationTest.onlyFreshCorrectlySignedWebhooksAreAccepted` | FR-PAY-04: không ký, ký sai, sửa body, gửi lại sau 6 phút đều 401 |
+| `TicketIntegrationTest.aTicketGetsInOnceAndOnlyThroughItsOrganizer` | FR-TKT-03 |
+| `TicketIntegrationTest.simultaneousScansAdmitExactlyOnce` | FR-TKT-03: 20 lần quét đồng thời, đúng 1 được vào |
+| `CancellationEmailIntegrationTest` | FR-NTF-02: email ghi lý do; email hoàn tiền dù hai event đến theo thứ tự nào |
+| `ResilienceTest` | NFR-AVAIL-02: cắt ở 2 giây; breaker mở sau 20 lỗi và không gọi service nữa |
 
 ## Cấu trúc
 
 ```
 observability/          OpenTelemetry, Prometheus, Logback gửi OTLP, cấu hình quan sát dùng chung
+security/               resource server JWT dùng chung: Caller, @CustomerOnly/@OrganizerOnly, 401/403 problem+json, OpenAPI
 common/                 service chassis dùng chung: outbox, idempotent consumer, contract message, xử lý lỗi
-api-gateway/            định tuyến; sau này thêm JWT và rate limit
+api-gateway/            định tuyến, kiểm JWT, rate limit, circuit breaker, Swagger UI
 event-service/          sự kiện, khu ghế, giờ mở bán
 booking-service/        kho ghế, giữ ghế (src/main/resources/redis/*.lua), booking, điều phối saga
 payment-service/        thanh toán, cổng giả lập, webhook, hoàn tiền
 ticket-service/         vé điện tử, token QR ký HMAC
 notification-service/   email vé kèm mã QR (zxing) qua SMTP
 waiting-room-service/   hàng đợi ảo trong Redis (Lua), vé vào cửa JWT, SSE
-load-test/              kịch bản k6: flash sale, waiting room, API đọc
+load-test/              kịch bản k6: flash sale, waiting room, API đọc, diễn tập sự cố
+deploy/helm/ticketrush/ Helm chart: 7 service x 2 instance, hạ tầng, Secret sinh tự động
+deploy/kind/            cụm kind 3 node và script dựng
+infra/keycloak/         realm ticketrush: vai trò, client, tài khoản demo
 infra/postgres/         tạo database và role riêng cho từng service
 infra/otel-collector/   nhận OTLP, chuyển trace sang Jaeger, log sang Loki
 infra/prometheus/       scrape và luật cảnh báo
 infra/grafana/          datasource và dashboard nạp sẵn
 docs/adr/               các quyết định kiến trúc
-scripts/                smoke test end-to-end
+scripts/                smoke test end-to-end, đối soát cuối đợt, kiểm tra bán trùng
 ```
 
 ## Quyết định kiến trúc
@@ -223,6 +303,8 @@ scripts/                smoke test end-to-end
 - [ADR 0003: Transactional Outbox và consumer idempotent](docs/adr/0003-transactional-outbox-with-polling-publisher.md)
 - [ADR 0004: Quan sát bằng OpenTelemetry, trace đi xuyên qua outbox](docs/adr/0004-observability-with-opentelemetry.md)
 - [ADR 0005: Waiting room bằng Redis sorted set, vé vào cửa là JWT](docs/adr/0005-waiting-room-in-redis-with-jwt-admission.md)
+- [ADR 0006: Keycloak cấp JWT, Gateway và từng service đều kiểm tra](docs/adr/0006-keycloak-jwt-checked-at-gateway-and-services.md)
+- [ADR 0007: Circuit breaker ở Gateway, webhook ký HMAC](docs/adr/0007-resilience-and-signed-webhooks.md)
 
 ## Tham khảo
 
@@ -230,3 +312,6 @@ scripts/                smoke test end-to-end
 - [piomin/sample-spring-kafka-microservices](https://github.com/piomin/sample-spring-kafka-microservices): Saga với Kafka trên Spring Boot
 - [debezium-examples/outbox](https://github.com/debezium/debezium-examples/tree/HEAD/outbox): Outbox và loại bỏ message trùng
 - [Hello Interview: Design Ticketmaster](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster): giữ ghế, waiting room
+- [keycloak/keycloak-quickstarts](https://github.com/keycloak/keycloak-quickstarts): realm, client và resource server
+- [resilience4j/resilience4j](https://github.com/resilience4j/resilience4j): circuit breaker, time limiter
+- [GoogleCloudPlatform/microservices-demo](https://github.com/GoogleCloudPlatform/microservices-demo): triển khai nhiều service lên Kubernetes

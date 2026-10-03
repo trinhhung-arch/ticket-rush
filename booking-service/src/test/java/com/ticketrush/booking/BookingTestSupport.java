@@ -35,7 +35,7 @@ import com.ticketrush.common.messaging.Topics;
 @AutoConfigureMockMvc
 @AutoConfigureTracing
 @AutoConfigureMetrics
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, StubPaymentVerifier.Config.class})
 abstract class BookingTestSupport {
 
     /** VIP 2x3 at 3,000,000 VND and GA 2x5 at 800,000 VND: 16 seats. */
@@ -61,6 +61,8 @@ abstract class BookingTestSupport {
 
     @Autowired
     JdbcClient jdbc;
+    @Autowired
+    StubPaymentVerifier paymentVerifier;
 
     /** Publishes an event the way event-service would and waits until its 16 seats are in the inventory. */
     UUID publishEvent(Instant salesOpenAt) {
@@ -71,7 +73,7 @@ abstract class BookingTestSupport {
         UUID eventId = UUID.randomUUID();
         send(Topics.EVENT_EVENTS, eventId, UUID.randomUUID(), new EventPublished(EventPublished.CURRENT_VERSION, eventId,
                 "Rock Night", "Mỹ Đình", "Hanoi", Instant.now().plus(30, ChronoUnit.DAYS), salesOpenAt, SECTIONS,
-                waitingRoom));
+                waitingRoom, "organizer-1"));
         await().atMost(WAIT).until(() -> jdbc.sql("select count(*) from seat_inventory where event_id = :id")
                 .param("id", eventId).query(Integer.class).single() == 16);
         return eventId;

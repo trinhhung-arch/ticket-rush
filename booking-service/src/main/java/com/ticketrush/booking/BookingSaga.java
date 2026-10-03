@@ -47,15 +47,17 @@ public class BookingSaga {
     private final SeatHoldStore holds;
     private final OutboxWriter outbox;
     private final BookingMetrics metrics;
+    private final PaymentVerifier paymentVerifier;
 
     BookingSaga(BookingRepository bookings, EventInfoRepository events, SeatInventory inventory, SeatHoldStore holds,
-                OutboxWriter outbox, BookingMetrics metrics) {
+                OutboxWriter outbox, BookingMetrics metrics, PaymentVerifier paymentVerifier) {
         this.bookings = bookings;
         this.events = events;
         this.inventory = inventory;
         this.holds = holds;
         this.outbox = outbox;
         this.metrics = metrics;
+        this.paymentVerifier = paymentVerifier;
     }
 
     @Transactional
@@ -76,7 +78,15 @@ public class BookingSaga {
         switch (booking.status()) {
             case CONFIRMED -> log.info("Booking {} is already confirmed; ignoring payment {}", booking.id(), event.paymentId());
             case CANCELLED -> refund(booking, "BOOKING_" + booking.cancelReason());
-            case PENDING, AWAITING_PAYMENT -> confirmOrRefund(booking, event);
+            case PENDING, AWAITING_PAYMENT -> {
+                // A PaymentSucceeded event is only a claim; confirm against payment-service's own record,
+                // so a forged event on the bus cannot confirm an unpaid booking (NFR-SEC-01, FR-PAY-06).
+                if (paymentVerifier.confirmsPaid(event.bookingId(), event.paymentId())) {
+                    confirmOrRefund(booking, event);
+                } else {
+                    log.warn("Ignoring PaymentSucceeded for booking {}: not confirmed by payment-service", booking.id());
+                }
+            }
         }
     }
 

@@ -1,9 +1,9 @@
 // Waiting room capacity (NFR-PERF-05): 50,000 buyers join one event's queue within a minute.
-//   k6 run -e GATEWAY=http://localhost:8080 load-test/waiting-room.js
+//   k6 run -e GATEWAY=http://localhost:8080 -e LOAD_TEST_JWT_SECRET=... load-test/waiting-room.js
 import http from 'k6/http';
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
-import { GATEWAY, createEvent, uuid } from './lib.js';
+import { GATEWAY, bearer, createEvent, uuid } from './lib.js';
 
 const JOINS = Number(__ENV.JOINS || 50000);
 const admitted = new Counter('joins_admitted');
@@ -35,7 +35,7 @@ export function setup() {
 
 export default function (data) {
   const response = http.post(`${GATEWAY}/api/queue/events/${data.eventId}/join`, null,
-    { headers: { 'X-User-Id': `fan-${uuid()}` }, tags: { name: 'join' } });
+    { headers: { Authorization: bearer(`fan-${uuid()}`) }, tags: { name: 'join' } });
   const ok = check(response, { 'joined': (r) => r.status === 200 });
   if (ok) {
     (response.json('state') === 'ADMITTED' ? admitted : queued).add(1);

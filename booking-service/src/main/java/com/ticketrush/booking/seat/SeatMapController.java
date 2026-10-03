@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +34,7 @@ class SeatMapController {
         this.holds = holds;
     }
 
+    @SecurityRequirements // public: no token needed
     @GetMapping("/api/events/{eventId}/seats")
     SeatMapView seatMap(@PathVariable UUID eventId) {
         if (!events.existsById(eventId)) {

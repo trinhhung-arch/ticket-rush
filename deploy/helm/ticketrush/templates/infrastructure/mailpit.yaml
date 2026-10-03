@@ -1,0 +1,41 @@
+{{- if .Values.infrastructure.enabled }}
+{{- $ctx := dict "name" "mailpit" "root" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ticketrush.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ticketrush.selector" $ctx | nindent 8 }}
+    spec:
+      containers:
+        - name: mailpit
+          image: {{ .Values.infrastructure.mailpit.image }}
+          ports:
+            - { name: smtp, containerPort: 1025 }
+            - { name: http, containerPort: 8025 }
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    {{- include "ticketrush.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: smtp, port: 1025, targetPort: smtp }
+    - { name: http, port: 8025, targetPort: http, nodePort: {{ .Values.infrastructure.mailpit.nodePort }} }
+{{- end }}

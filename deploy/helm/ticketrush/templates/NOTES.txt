@@ -1,0 +1,6 @@
+TicketRush is starting; the Java services take a minute or two to become ready:
+  kubectl get pods -n {{ .Release.Namespace }} -w
+
+  API gateway:   {{ .Values.publicUrls.gateway }}   (Swagger UI: {{ .Values.publicUrls.gateway }}/swagger-ui.html)
+  Keycloak:      {{ .Values.publicUrls.keycloak }}   (demo accounts: organizer@, alice@ticketrush.dev ...)
+  Demo password: kubectl get secret {{ include "ticketrush.secretName" . }} -n {{ .Release.Namespace }} -o jsonpath='{.data.DEMO_USER_PASSWORD}' | base64 -d

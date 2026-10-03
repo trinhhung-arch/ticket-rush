@@ -32,7 +32,8 @@ class EventCatalogListener {
         this.jsonMapper = jsonMapper;
     }
 
-    @KafkaListener(topics = Topics.EVENT_EVENTS)
+    // Its own consumer group, so its rebalances never pause the saga's listener. Low volume: two threads.
+    @KafkaListener(topics = Topics.EVENT_EVENTS, groupId = "${spring.application.name}.event-catalog", concurrency = "2")
     @Transactional
     public void onMessage(ConsumerRecord<String, String> record) {
         IncomingMessage message = IncomingMessage.from(record);

@@ -17,6 +17,7 @@ import com.ticketrush.common.contract.PaymentEvents.PaymentCreated;
 import com.ticketrush.common.contract.PaymentEvents.PaymentFailed;
 import com.ticketrush.common.contract.PaymentEvents.PaymentRefunded;
 import com.ticketrush.common.contract.PaymentEvents.PaymentSucceeded;
+import com.ticketrush.common.contract.PaymentStatusView;
 import com.ticketrush.common.messaging.Topics;
 import com.ticketrush.common.outbox.OutboxWriter;
 import com.ticketrush.common.web.ApiException;
@@ -115,6 +116,14 @@ public class PaymentService {
                 .filter(payment -> payment.userId().equals(userId))
                 .map(PaymentView::of)
                 .orElseThrow(() -> ApiException.notFound("Payment %s not found".formatted(id)));
+    }
+
+    /** The authoritative payment state for a booking, for the booking saga to verify events against. */
+    @Transactional(readOnly = true)
+    public PaymentStatusView statusByBooking(UUID bookingId) {
+        return payments.findByBookingId(bookingId)
+                .map(payment -> new PaymentStatusView(payment.bookingId(), payment.id(), payment.status().name()))
+                .orElseThrow(() -> ApiException.notFound("No payment for booking %s".formatted(bookingId)));
     }
 
     @Transactional(readOnly = true)

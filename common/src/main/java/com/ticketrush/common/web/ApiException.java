@@ -22,6 +22,10 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.BAD_REQUEST, "Invalid request", detail);
     }
 
+    public static ApiException unauthorized(String detail) {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "Unauthorized", detail);
+    }
+
     public static ApiException forbidden(String detail) {
         return new ApiException(HttpStatus.FORBIDDEN, "Forbidden", detail);
     }
@@ -32,6 +36,10 @@ public class ApiException extends RuntimeException {
 
     public static ApiException unprocessable(String detail) {
         return new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "Unprocessable request", detail);
+    }
+
+    public static ApiException payloadTooLarge(String detail) {
+        return new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "Payload too large", detail);
     }
 
     public static ApiException conflict(String detail) {

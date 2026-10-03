@@ -1,5 +1,7 @@
 package com.ticketrush.event;
 
+import static com.ticketrush.security.TestJwts.customer;
+import static com.ticketrush.security.TestJwts.organizer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
@@ -51,7 +53,7 @@ class EventApiIntegrationTest {
 
         assertThat(searchByCity(city)).bodyJson().extractingPath("$.totalItems").isEqualTo(0);
 
-        assertThat(mvc.post().uri("/api/events/{id}/publish", id).header("X-User-Id", ORGANIZER))
+        assertThat(mvc.post().uri("/api/events/{id}/publish", id).with(organizer(ORGANIZER)))
                 .hasStatusOk().bodyJson().extractingPath("$.status").isEqualTo("PUBLISHED");
 
         assertThat(searchByCity(city)).hasStatusOk().bodyJson()
@@ -59,7 +61,7 @@ class EventApiIntegrationTest {
                 .hasPathSatisfying("$.items[0].totalSeats", value -> value.assertThat().isEqualTo(10))
                 .hasPathSatisfying("$.items[0].minPriceVnd", value -> value.assertThat().isEqualTo(800000));
 
-        assertThat(mvc.put().uri("/api/events/{id}", id).header("X-User-Id", ORGANIZER)
+        assertThat(mvc.put().uri("/api/events/{id}", id).with(organizer(ORGANIZER))
                 .contentType(MediaType.APPLICATION_JSON).content(eventJson(city, "VIP")))
                 .hasStatus(HttpStatus.CONFLICT)
                 .bodyJson().extractingPath("$.title").isEqualTo("Conflict");
@@ -69,8 +71,8 @@ class EventApiIntegrationTest {
     void publishingAnnouncesTheEventOnKafkaExactlyOnce() {
         String id = createEvent("Hue");
 
-        mvc.post().uri("/api/events/{id}/publish", id).header("X-User-Id", ORGANIZER).exchange();
-        mvc.post().uri("/api/events/{id}/publish", id).header("X-User-Id", ORGANIZER).exchange();
+        mvc.post().uri("/api/events/{id}/publish", id).with(organizer(ORGANIZER)).exchange();
+        mvc.post().uri("/api/events/{id}/publish", id).with(organizer(ORGANIZER)).exchange();
 
         List<ConsumerRecord<String, String>> published = readEventTopicFor(id, Duration.ofSeconds(10));
         assertThat(published).hasSize(1);
@@ -84,11 +86,11 @@ class EventApiIntegrationTest {
     void draftsCanBeEditedOnlyByTheirOrganizer() {
         String id = createEvent("Hanoi");
 
-        assertThat(mvc.put().uri("/api/events/{id}", id).header("X-User-Id", ORGANIZER)
+        assertThat(mvc.put().uri("/api/events/{id}", id).with(organizer(ORGANIZER))
                 .contentType(MediaType.APPLICATION_JSON).content(eventJson("Hanoi", "VVIP")))
                 .hasStatusOk().bodyJson().extractingPath("$.sections[0].code").isEqualTo("VVIP");
 
-        assertThat(mvc.post().uri("/api/events/{id}/publish", id).header("X-User-Id", "someone-else"))
+        assertThat(mvc.post().uri("/api/events/{id}/publish", id).with(organizer("someone-else")))
                 .hasStatus(HttpStatus.FORBIDDEN);
         assertThat(mvc.get().uri("/api/events/{id}", id)).hasStatus(HttpStatus.NOT_FOUND);
     }
@@ -100,23 +102,31 @@ class EventApiIntegrationTest {
                 {"name":"Late sale","venue":"Venue","city":"HCMC","startsAt":"%s","salesOpenAt":"%s",
                  "sections":[{"code":"GA","name":"Standard","rows":1,"seatsPerRow":1,"priceVnd":1}]}
                 """.formatted(startsAt, startsAt.plus(1, ChronoUnit.DAYS));
-        assertThat(mvc.post().uri("/api/events").header("X-User-Id", ORGANIZER)
+        assertThat(mvc.post().uri("/api/events").with(organizer(ORGANIZER))
                 .contentType(MediaType.APPLICATION_JSON).content(salesAfterStart))
                 .hasStatus(HttpStatus.BAD_REQUEST)
                 .hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
 
         String badSectionCode = eventJson("HCMC", "vip-lower");
-        assertThat(mvc.post().uri("/api/events").header("X-User-Id", ORGANIZER)
+        assertThat(mvc.post().uri("/api/events").with(organizer(ORGANIZER))
                 .contentType(MediaType.APPLICATION_JSON).content(badSectionCode))
                 .hasStatus(HttpStatus.BAD_REQUEST);
 
+    }
+
+    @Test
+    void onlyOrganizersChangeTheCatalogue() {
         assertThat(mvc.post().uri("/api/events")
                 .contentType(MediaType.APPLICATION_JSON).content(eventJson("HCMC", "VIP")))
-                .as("missing X-User-Id").hasStatus(HttpStatus.BAD_REQUEST);
+                .as("no token").hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(mvc.post().uri("/api/events").with(customer("an"))
+                .contentType(MediaType.APPLICATION_JSON).content(eventJson("HCMC", "VIP")))
+                .as("customer").hasStatus(HttpStatus.FORBIDDEN).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(mvc.get().uri("/api/events").param("city", "HCMC")).as("browsing is public").hasStatusOk();
     }
 
     private String createEvent(String city) {
-        MvcTestResult result = mvc.post().uri("/api/events").header("X-User-Id", ORGANIZER)
+        MvcTestResult result = mvc.post().uri("/api/events").with(organizer(ORGANIZER))
                 .contentType(MediaType.APPLICATION_JSON).content(eventJson(city, "VIP")).exchange();
         assertThat(result).hasStatus(HttpStatus.CREATED).bodyJson().extractingPath("$.status").isEqualTo("DRAFT");
         return JsonPath.read(new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8), "$.id");

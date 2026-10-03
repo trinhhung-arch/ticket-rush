@@ -1,0 +1,253 @@
+{
+  "realm": "ticketrush",
+  "displayName": "TicketRush",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      {
+        "name": "CUSTOMER",
+        "description": "Buys tickets; every new account gets it"
+      },
+      {
+        "name": "ORGANIZER",
+        "description": "Creates and publishes events, checks tickets in"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Operates the platform"
+      },
+      {
+        "name": "offline_access",
+        "description": "${role_offline-access}"
+      },
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}"
+      },
+      {
+        "name": "default-roles-ticketrush",
+        "description": "Given to every account, including self-registered ones",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "offline_access",
+            "uma_authorization",
+            "CUSTOMER"
+          ],
+          "client": {
+            "account": [
+              "view-profile",
+              "manage-account"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-ticketrush",
+    "composite": true
+  },
+  "clients": [
+    {
+      "clientId": "ticketrush-web",
+      "name": "TicketRush web and Swagger UI",
+      "description": "Browser login (authorization code with PKCE) for the gateway's Swagger UI: compose on 8080 or 18080, kind on 28080",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://localhost:18080/*",
+        "http://localhost:28080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://localhost:18080",
+        "http://localhost:28080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "ticketrush-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "ticketrush-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "realm roles as roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "ticketrush-cli",
+      "name": "TicketRush scripts",
+      "description": "Local development only: password grant for curl, the smoke test and the demo",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "ticketrush-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "ticketrush-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "realm roles as roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "organizer@ticketrush.dev",
+      "email": "organizer@ticketrush.dev",
+      "emailVerified": true,
+      "firstName": "Olivia",
+      "lastName": "Organizer",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-ticketrush",
+        "ORGANIZER"
+      ]
+    },
+    {
+      "username": "admin@ticketrush.dev",
+      "email": "admin@ticketrush.dev",
+      "emailVerified": true,
+      "firstName": "Ada",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-ticketrush",
+        "ADMIN"
+      ]
+    },
+    {
+      "username": "alice@ticketrush.dev",
+      "email": "alice@ticketrush.dev",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Nguyen",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-ticketrush"
+      ]
+    },
+    {
+      "username": "bob@ticketrush.dev",
+      "email": "bob@ticketrush.dev",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Tran",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-ticketrush"
+      ]
+    },
+    {
+      "username": "chi@ticketrush.dev",
+      "email": "chi@ticketrush.dev",
+      "emailVerified": true,
+      "firstName": "Chi",
+      "lastName": "Pham",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-ticketrush"
+      ]
+    },
+    {
+      "username": "dung@ticketrush.dev",
+      "email": "dung@ticketrush.dev",
+      "emailVerified": true,
+      "firstName": "Dung",
+      "lastName": "Le",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-ticketrush"
+      ]
+    }
+  ]
+}

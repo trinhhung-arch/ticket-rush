@@ -102,7 +102,8 @@ public class Event {
 
     EventPublished toPublishedMessage() {
         return new EventPublished(
-                EventPublished.CURRENT_VERSION, id, name, venue, city, startsAt, salesOpenAt, sectionSpecs(), waitingRoom);
+                EventPublished.CURRENT_VERSION, id, name, venue, city, startsAt, salesOpenAt, sectionSpecs(), waitingRoom,
+                organizerId);
     }
 
     private void apply(EventDetails details) {

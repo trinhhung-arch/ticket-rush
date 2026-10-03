@@ -1,8 +1,31 @@
 server:
   port: ${PORT:8080}
+  # NFR-AVAIL-06: finish in-flight requests on SIGTERM, for at most 30 s.
   shutdown: graceful
 
+# The gateway is the one service exposed outside the cluster, so its actuator (metrics included) lives on
+# a separate port that is never published or routed. Prometheus scrapes it inside the network; the public
+# port serves only /api. Default equals the app port, i.e. no separation, for local `mvn`/IDE runs.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8080}
+
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  cloud:
+    circuitbreaker:
+      bulkhead:
+        resilience4j:
+          # On by default with a 25-call limit per service. The gateway is non-blocking and the
+          # rate limiter already guards the booking API; the bulkhead turned a crowd of customers
+          # polling during the payment outage drill into "failures" that opened booking's breaker.
+          enabled: false
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 1000
   config:
     import: classpath:ticketrush-observability.yml
   application:
@@ -11,8 +34,22 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:16379}
+      password: ${REDIS_PASSWORD:}
 
 ticketrush:
+  security:
+    # Same settings as the services (security module's ticketrush-security.yml).
+    issuer: ${JWT_ISSUER:http://localhost:8180/realms/ticketrush}
+    jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/ticketrush/protocol/openid-connect/certs}
+    audience: ticketrush-api
+    load-test:
+      secret: ${LOAD_TEST_ISSUER_SECRET:}
+  resilience:
+    # NFR-AVAIL-02: 2 s per call; open after >= 50 % failures in the last 20 calls, for 10 s.
+    timeout: 2s
+    sliding-window: 20
+    failure-rate-percent: 50
+    open-for: 10s
   routes:
     event-service: ${EVENT_SERVICE_URI:http://localhost:8081}
     booking-service: ${BOOKING_SERVICE_URI:http://localhost:8082}
@@ -22,3 +59,22 @@ ticketrush:
   rate-limit:
     # FR-GW-02: 10 booking requests per second per user; the 11th within a second gets 429.
     bookings-per-second: ${BOOKING_RATE_LIMIT:10}
+
+# One Swagger UI for all services at /swagger-ui.html; "Authorize" signs in through Keycloak with PKCE.
+springdoc:
+  api-docs:
+    # The gateway has no API of its own worth describing; the UI lists the services instead.
+    enabled: true
+  swagger-ui:
+    urls:
+      - { name: event-service, url: /api-docs/event-service }
+      - { name: booking-service, url: /api-docs/booking-service }
+      - { name: payment-service, url: /api-docs/payment-service }
+      - { name: ticket-service, url: /api-docs/ticket-service }
+      - { name: waiting-room-service, url: /api-docs/waiting-room-service }
+    urls-primary-name: booking-service
+    persist-authorization: true
+    oauth:
+      client-id: ticketrush-web
+      use-pkce-with-authorization-code-grant: true
+      scopes: openid
