@@ -13,15 +13,15 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * NFR-MAINT-02: each service describes its REST API at /v3/api-docs. The gateway's Swagger UI shows
  * them all and logs in through Keycloak (authorization code + PKCE); "Try it out" goes through the
  * gateway, since the server URL is relative to the page.
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 class OpenApiConfig {
 
     static final String SCHEME = "keycloak";

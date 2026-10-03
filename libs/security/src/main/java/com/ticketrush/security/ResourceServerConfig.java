@@ -6,9 +6,13 @@ import java.util.Map;
 
 import javax.crypto.spec.SecretKeySpec;
 
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -35,8 +39,12 @@ import tools.jackson.databind.json.JsonMapper;
  * Every service checks the token itself instead of trusting the gateway (NFR-SEC-01): the gateway
  * rejects unsigned traffic early, and a service reached some other way still accepts only valid
  * Keycloak tokens. Roles are checked per endpoint with {@link CustomerOnly} and {@link OrganizerOnly}.
+ *
+ * <p>Runs before Boot's security auto-configuration, whose default filter chain, JwtDecoder and
+ * in-memory user back off once these beans exist.
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(before = {ServletWebSecurityAutoConfiguration.class, ManagementWebSecurityAutoConfiguration.class,
+        OAuth2ResourceServerAutoConfiguration.class, UserDetailsServiceAutoConfiguration.class})
 @EnableMethodSecurity
 @EnableConfigurationProperties(SecurityProperties.class)
 class ResourceServerConfig {

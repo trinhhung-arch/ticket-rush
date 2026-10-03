@@ -1,7 +1,6 @@
 package com.ticketrush.messaging.inbox;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,7 +11,6 @@ import com.ticketrush.messaging.kafka.IncomingMessage;
  * message is recognised and skipped (NFR-CORR-03). One statement: if another delivery of the same
  * message is in flight, the insert waits for it and then either conflicts or goes through.
  */
-@Component
 public class IdempotentConsumer {
 
     private final JdbcClient jdbc;

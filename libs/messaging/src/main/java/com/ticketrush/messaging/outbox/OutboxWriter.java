@@ -8,13 +8,11 @@ import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Services never call Kafka directly: they append to the outbox and {@link OutboxRelay} publishes after commit. */
-@Component
 public class OutboxWriter {
 
     static final String TRACEPARENT = "traceparent";

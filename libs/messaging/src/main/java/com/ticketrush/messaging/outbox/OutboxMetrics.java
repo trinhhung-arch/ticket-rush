@@ -6,13 +6,11 @@ import java.time.Instant;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
-import org.springframework.stereotype.Component;
 
 /**
  * How far the outbox relay is behind: messages waiting and the age of the oldest one. A growing lag
  * means Kafka or the relay is stuck (NFR-OBS-02, alert in NFR-OBS-04). Read on every scrape.
  */
-@Component
 class OutboxMetrics implements MeterBinder {
 
     private final OutboxRepository repository;

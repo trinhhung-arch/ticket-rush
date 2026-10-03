@@ -43,3 +43,8 @@ spring:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
 
+ticketrush:
+  outbox:
+    # Only consumes: it sends email but publishes no messages, so no outbox writer or relay.
+    # The outbox_message table created by V1 stays unused.
+    enabled: false

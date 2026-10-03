@@ -1,17 +1,15 @@
-package com.ticketrush;
+package com.ticketrush.booking;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
-/** Virtual waiting room in front of hot events (FR-WR-01 to 03). */
+/** Lives in the root package so component, entity and repository scanning also cover the common module. */
 @SpringBootApplication
 @ConfigurationPropertiesScan
-@EnableScheduling
-public class WaitingRoomServiceApplication {
+public class BookingServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(WaitingRoomServiceApplication.class, args);
+        SpringApplication.run(BookingServiceApplication.class, args);
     }
 }

@@ -19,7 +19,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -30,7 +29,6 @@ import com.ticketrush.contracts.MessageHeaders;
  * A crash between send and commit re-sends the batch, so delivery is at-least-once and
  * every consumer must be idempotent (see {@code IdempotentConsumer}).
  */
-@Component
 @ConditionalOnProperty(name = "ticketrush.outbox.relay.enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxRelay {
 

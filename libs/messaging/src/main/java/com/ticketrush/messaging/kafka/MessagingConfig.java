@@ -9,9 +9,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.kafka.autoconfigure.DefaultKafkaConsumerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.kafka.config.ContainerCustomizer;
 import org.springframework.kafka.config.TopicBuilder;
@@ -27,7 +27,7 @@ import tools.jackson.core.JacksonException;
 
 import com.ticketrush.contracts.Topics;
 
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 @EnableScheduling
 public class MessagingConfig {
 
