@@ -151,7 +151,7 @@ class TicketIntegrationTest {
         send(bookingId, UUID.randomUUID(), confirmed(bookingId, eventId, "an", "GA-A-09"));
         await().atMost(Duration.ofSeconds(30)).until(() -> ticketsFor(bookingId) == 1);
         String qr = qrTokens(bookingId).getFirst();
-        Caller gate = new Caller("ada", "ada@example.com", Set.of(Roles.ADMIN));
+        Caller gate = new Caller("ada", "ada@example.com", true, Set.of(Roles.ADMIN));
 
         Set<String> outcomes = ConcurrentHashMap.newKeySet();
         List<String> results = Collections.synchronizedList(new ArrayList<>());

@@ -126,6 +126,14 @@ class PaymentIntegrationTest {
                 .bodyJson().extractingPath("$.status").isEqualTo("SUCCEEDED");
     }
 
+    /** NFR-SEC: the public webhook rejects an oversized body with 413 instead of buffering it all. */
+    @Test
+    void aWebhookBodyOverTheCapIsRejected() {
+        String tooBig = "A".repeat(65 * 1024);
+        assertThat(postWebhook(tooBig, null)).hasStatus(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(postWebhook(tooBig, "t=1,v1=00")).hasStatus(HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+
     @Test
     void readingAPaymentNeedsItsOwnersToken() {
         UUID bookingId = UUID.randomUUID();

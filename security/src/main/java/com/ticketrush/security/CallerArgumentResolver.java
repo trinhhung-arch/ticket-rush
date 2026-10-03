@@ -41,6 +41,7 @@ class CallerArgumentResolver implements HandlerMethodArgumentResolver {
                 .filter(authority -> authority.startsWith(ROLE_PREFIX))
                 .map(authority -> authority.substring(ROLE_PREFIX.length()))
                 .collect(Collectors.toUnmodifiableSet());
-        return new Caller(jwt.getSubject(), jwt.getClaimAsString("email"), roles);
+        return new Caller(jwt.getSubject(), jwt.getClaimAsString("email"),
+                Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified")), roles);
     }
 }

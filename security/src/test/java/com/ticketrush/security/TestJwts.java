@@ -36,6 +36,14 @@ public final class TestJwts {
         return as(id, Roles.CUSTOMER);
     }
 
+    /** A customer whose email is not verified, for the guard that tickets go only to confirmed addresses. */
+    public static RequestPostProcessor unverifiedCustomer(String id) {
+        return SecurityMockMvcRequestPostProcessors.jwt()
+                .jwt(jwt -> jwt.subject(id).claim("email", id + "@example.com")
+                        .claim("email_verified", false).claim("roles", List.of(Roles.CUSTOMER)))
+                .authorities(new SimpleGrantedAuthority("ROLE_" + Roles.CUSTOMER));
+    }
+
     public static RequestPostProcessor organizer(String id) {
         return as(id, Roles.CUSTOMER, Roles.ORGANIZER);
     }
@@ -47,7 +55,8 @@ public final class TestJwts {
     /** A valid token for {@code id}, with {@code id@example.com} as email and the given roles. */
     public static RequestPostProcessor as(String id, String... roles) {
         return SecurityMockMvcRequestPostProcessors.jwt()
-                .jwt(jwt -> jwt.subject(id).claim("email", id + "@example.com").claim("roles", List.of(roles)))
+                .jwt(jwt -> jwt.subject(id).claim("email", id + "@example.com")
+                        .claim("email_verified", true).claim("roles", List.of(roles)))
                 .authorities(Arrays.stream(roles).map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                         .toArray(GrantedAuthority[]::new));
     }

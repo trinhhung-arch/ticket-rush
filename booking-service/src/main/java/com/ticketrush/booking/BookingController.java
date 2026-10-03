@@ -55,6 +55,11 @@ class BookingController {
         if (caller.email() == null) {
             throw ApiException.unprocessable("The account has no email address to send the tickets to");
         }
+        // Tickets (with their QR codes) are emailed to the account's address, so it must be a confirmed one;
+        // otherwise a self-registered, unverified address could receive someone else's tickets (NFR-SEC-01).
+        if (!caller.emailVerified()) {
+            throw ApiException.forbidden("Verify your email address before booking; tickets are sent there");
+        }
         BookingService.Result result = bookings.create(new CreateBooking(
                 caller.id(), idempotencyKey, request.eventId(), request.seatCodes(), caller.email(), admissionToken));
         if (!result.created()) {

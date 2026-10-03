@@ -38,6 +38,10 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "Unprocessable request", detail);
     }
 
+    public static ApiException payloadTooLarge(String detail) {
+        return new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "Payload too large", detail);
+    }
+
     public static ApiException conflict(String detail) {
         return new ApiException(HttpStatus.CONFLICT, "Conflict", detail);
     }

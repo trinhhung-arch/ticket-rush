@@ -137,6 +137,20 @@ class BookingIntegrationTest extends BookingTestSupport {
                 .as("other customers cannot see it").hasStatus(HttpStatus.NOT_FOUND);
     }
 
+    /** NFR-SEC-01: tickets go to the account's email, so an unverified address cannot book (BIZ-12). */
+    @Test
+    void bookingNeedsAVerifiedEmail() {
+        UUID eventId = publishEventOnSale();
+        String body = """
+                {"eventId":"%s","seatCodes":["GA-A-01"]}
+                """.formatted(eventId);
+        assertThat(mvc.post().uri("/api/bookings").with(TestJwts.unverifiedCustomer("mallory"))
+                .header("Idempotency-Key", "unverified-" + eventId)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(bookingsContaining(eventId, "GA-A-01")).isEqualTo(0);
+    }
+
     /** FR-BKG-01: held seats show up as HELD without being written to the database. */
     @Test
     void seatMapShowsLiveHolds() {
