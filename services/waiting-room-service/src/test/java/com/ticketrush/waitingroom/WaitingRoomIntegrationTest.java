@@ -29,7 +29,9 @@ import org.testcontainers.containers.GenericContainer;
 
 import com.ticketrush.security.Roles;
 import com.ticketrush.security.TestJwts;
-import com.ticketrush.waitingroom.QueueStatus.State;
+import com.ticketrush.waitingroom.domain.QueueStatus;
+import com.ticketrush.waitingroom.domain.QueueStatus.State;
+import com.ticketrush.waitingroom.domain.WaitingRoom;
 
 /** One place in the room and 2-second admissions, so the queue moves within the test. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {

@@ -48,6 +48,8 @@ import com.ticketrush.contracts.event.EventPublished;
 import com.ticketrush.contracts.event.SectionSpec;
 import com.ticketrush.security.Caller;
 import com.ticketrush.security.Roles;
+import com.ticketrush.ticket.domain.CheckIn;
+import com.ticketrush.ticket.domain.TicketTokens;
 import com.ticketrush.web.ApiException;
 
 @SpringBootTest

@@ -33,6 +33,8 @@ import com.ticketrush.contracts.payment.PaymentCommands;
 import com.ticketrush.contracts.payment.PaymentCommands.CancelPayment;
 import com.ticketrush.contracts.payment.PaymentCommands.CreatePayment;
 import com.ticketrush.contracts.payment.PaymentCommands.RefundPayment;
+import com.ticketrush.payment.config.PaymentProperties;
+import com.ticketrush.payment.psp.WebhookSignature;
 
 @SpringBootTest(properties = "ticketrush.payment.webhook.secret=" + PaymentIntegrationTest.WEBHOOK_SECRET)
 @AutoConfigureMockMvc

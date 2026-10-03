@@ -29,6 +29,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
+import com.ticketrush.booking.domain.BookingSeat;
+import com.ticketrush.booking.domain.BookingService;
+import com.ticketrush.booking.domain.CreateBooking;
 import com.ticketrush.security.Roles;
 import com.ticketrush.security.TestJwts;
 import com.ticketrush.web.ApiException;

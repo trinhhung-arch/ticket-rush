@@ -22,6 +22,9 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import tools.jackson.databind.json.JsonMapper;
 
 import com.ticketrush.TestcontainersConfiguration;
+import com.ticketrush.booking.domain.BookingService;
+import com.ticketrush.booking.domain.BookingStatus;
+import com.ticketrush.booking.domain.CreateBooking;
 import com.ticketrush.contracts.MessageHeaders;
 import com.ticketrush.contracts.Topics;
 import com.ticketrush.contracts.event.EventPublished;
