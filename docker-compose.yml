@@ -318,7 +318,7 @@ services:
     ports: ["127.0.0.1:16686:16686"]
 
   loki:
-    image: grafana/loki:3.7.0
+    image: grafana/loki:3.7.8
 
   prometheus:
     image: prom/prometheus:v3.15.0
