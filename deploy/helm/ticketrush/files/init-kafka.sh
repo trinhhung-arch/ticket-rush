@@ -1,0 +1,1 @@
+../../../../infra/kafka/init-kafka.sh

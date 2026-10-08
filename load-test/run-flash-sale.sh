@@ -6,6 +6,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+set -a; . ./.env; set +a
+GATEWAY=${GATEWAY:-http://localhost:${GATEWAY_PORT:-8080}}
+export LOAD_TEST_JWT_SECRET
+./load-test/preflight.sh "$GATEWAY"
+
 flush_at=""
 if [ "${1:-}" = "--flush-redis-at" ]; then
   flush_at=${2:?seconds}
@@ -15,7 +20,7 @@ stamp=$(date +%Y%m%d-%H%M%S)
 log=load-test/results/flash-sale-$stamp.log
 
 echo "Warming up the JVMs for 20 s (not measured)..."
-k6 run --quiet -e GATEWAY="${GATEWAY:-http://localhost:8080}" -e RATE=200 -e DURATION=20s \
+k6 run --quiet -e GATEWAY="$GATEWAY" -e LOAD_TEST_JWT_SECRET="$LOAD_TEST_JWT_SECRET" -e RATE=200 -e DURATION=20s \
   --no-thresholds load-test/flash-sale.js > /dev/null 2>&1 || true
 
 if [ -n "$flush_at" ]; then
@@ -26,7 +31,7 @@ if [ -n "$flush_at" ]; then
     docker compose exec -T redis redis-cli FLUSHALL ) &
 fi
 
-k6 run -e GATEWAY="${GATEWAY:-http://localhost:8080}" -e RATE="${RATE:-1000}" -e DURATION="${DURATION:-1m}" \
+k6 run -e GATEWAY="$GATEWAY" -e LOAD_TEST_JWT_SECRET="$LOAD_TEST_JWT_SECRET" -e RATE="${RATE:-1000}" -e DURATION="${DURATION:-1m}" \
   --summary-export "load-test/results/flash-sale-$stamp.json" load-test/flash-sale.js 2>&1 | tee "$log" || true
 wait
 
@@ -34,3 +39,4 @@ event_id=$(grep -oE 'EVENT_ID=[0-9a-f-]{36}' "$log" | head -1 | cut -d= -f2)
 echo "Waiting for the saga to settle..."
 sleep 20
 ./scripts/check-oversell.sh "$event_id" | tee -a "$log"
+./scripts/reconcile.py "$event_id" | tee -a "$log" || true

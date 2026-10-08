@@ -1,0 +1,78 @@
+{{- if .Values.infrastructure.enabled }}
+{{- $ctx := dict "name" "postgres" "root" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+data:
+  # One database and one role per service (NFR-MAINT-01); the same script docker compose uses.
+  init-databases.sh: |
+    {{- .Files.Get "files/init-databases.sh" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ticketrush.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ticketrush.selector" $ctx | nindent 8 }}
+    spec:
+      # The image's postgres user (70); the entrypoint supports running without root.
+      {{- include "ticketrush.podSecurity" (dict "uid" 70 "gid" 70) | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ .Values.infrastructure.postgres.image }}
+          args: ["postgres", "-c", "max_connections=200"]
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            {{- range list "POSTGRES_PASSWORD" "EVENT_DB_PASSWORD" "BOOKING_DB_PASSWORD" "PAYMENT_DB_PASSWORD" "TICKET_DB_PASSWORD" "NOTIFY_DB_PASSWORD" "KEYCLOAK_DB_PASSWORD" }}
+            {{- include "ticketrush.secretEnv" (dict "env" . "key" . "root" $) | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres"] }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.infrastructure.postgres.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    {{- include "ticketrush.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "ticketrush.selector" $ctx | nindent 4 }}
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+{{- end }}

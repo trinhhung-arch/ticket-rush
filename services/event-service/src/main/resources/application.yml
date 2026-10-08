@@ -1,0 +1,54 @@
+server:
+  port: ${PORT:8081}
+  # NFR-AVAIL-06: finish in-flight requests on SIGTERM, for at most 30 s.
+  shutdown: graceful
+  tomcat:
+    # Room for a burst of new connections from the gateway. At the default of 100 the kernel
+    # dropped SYNs during the payment outage drill (ListenOverflows), and gateway connects timed out.
+    accept-count: 1024
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  config:
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,classpath:ticketrush-messaging.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
+  application:
+    name: event-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:15432}/${DB_NAME:event_db}
+    username: ${DB_USER:event_svc}
+    password: ${DB_PASSWORD:${EVENT_DB_PASSWORD:}}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      acks: all
+    consumer:
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+  data:
+    web:
+      pageable:
+        max-page-size: 50
+
+
+ticketrush:
+  kafka:
+    # Kafka password when started from the IDE, read from .env (containers get KAFKA_PASSWORD).
+    password: ${KAFKA_EVENT_SERVICE_PASSWORD:}
+  security:
+    # Browsing the catalogue needs no account (FR-EVT-03); changing it needs ORGANIZER.
+    public-paths:
+      - GET /api/events
+      - GET /api/events/**
+  outbox:
+    relay:
+      interval-ms: 200
