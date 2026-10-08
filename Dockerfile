@@ -2,6 +2,9 @@
 # One recipe for every service: docker build --build-arg MODULE=booking-service .
 # MODULE is the artifactId; every deployable module lives under services/.
 FROM eclipse-temurin:21-jdk AS build
+# Without unzip the Maven wrapper fetches the .tar.gz distribution instead of the .zip whose SHA-256
+# .mvn/wrapper/maven-wrapper.properties pins (SC-05), and refuses it as a mismatch.
+RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY . .
 ARG MODULE

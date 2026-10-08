@@ -52,7 +52,8 @@ echo "Kafka sign-in and ACLs"
 
 out=$(topics anonymous -); if [[ "$out" != *event.events* ]]; then pass "no credentials: the broker lists nothing"; else fail "no credentials: topics were listed"; fi
 
-out=$(topics booking-service wrong-password)
+# A random password: right user, wrong secret.
+out=$(topics booking-service "$(openssl rand -hex 12)")
 if [[ "$out" == *"Authentication failed"* ]]; then pass "wrong password: sign-in refused"; else fail "wrong password: topics were listed"; fi
 
 case "$(read_one booking-service "$KAFKA_BOOKING_SERVICE_PASSWORD" ticket.events)" in
