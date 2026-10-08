@@ -58,14 +58,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: '*/target/site/jacoco/'
+          path: '*/*/target/site/jacoco/'
           if-no-files-found: ignore
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: '*/target/surefire-reports/'
+          path: '*/*/target/surefire-reports/'
 
   images:
     name: Image ${{ matrix.module }}

@@ -16,6 +16,8 @@ spec:
       labels:
         {{- include "ticketrush.selector" $ctx | nindent 8 }}
     spec:
+      # The image's redis user (999, group 1000), which owns /data.
+      {{- include "ticketrush.podSecurity" (dict "uid" 999 "gid" 1000) | nindent 6 }}
       containers:
         - name: redis
           image: {{ .Values.infrastructure.redis.image }}
@@ -34,6 +36,7 @@ spec:
             periodSeconds: 5
           resources:
             requests: { cpu: 50m, memory: 64Mi }
+          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
 ---
 apiVersion: v1
 kind: Service

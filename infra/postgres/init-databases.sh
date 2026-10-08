@@ -18,3 +18,8 @@ create_service_db booking_db booking_svc "$BOOKING_DB_PASSWORD"
 create_service_db payment_db payment_svc "$PAYMENT_DB_PASSWORD"
 create_service_db ticket_db ticket_svc "$TICKET_DB_PASSWORD"
 create_service_db notify_db notify_svc "$NOTIFY_DB_PASSWORD"
+# Keycloak's own database in the Helm chart (production mode, INF-05); docker compose runs Keycloak in
+# dev mode on its embedded database and does not set the password.
+if [ -n "${KEYCLOAK_DB_PASSWORD:-}" ]; then
+  create_service_db keycloak_db keycloak_svc "$KEYCLOAK_DB_PASSWORD"
+fi

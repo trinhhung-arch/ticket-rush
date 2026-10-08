@@ -1,0 +1,3 @@
+com.ticketrush.messaging.kafka.MessagingConfig
+com.ticketrush.messaging.outbox.OutboxAutoConfiguration
+com.ticketrush.messaging.inbox.InboxAutoConfiguration

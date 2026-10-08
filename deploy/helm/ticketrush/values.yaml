@@ -51,7 +51,10 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Signs in to Kafka as itself (INF-04); see infra/kafka/init-kafka.sh for what it may do.
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
     secretEnv:
+      KAFKA_PASSWORD: KAFKA_EVENT_SERVICE_PASSWORD
       DB_PASSWORD: EVENT_DB_PASSWORD
   booking-service:
     port: 8082
@@ -67,9 +70,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Signs in to Kafka as itself (INF-04); see infra/kafka/init-kafka.sh for what it may do.
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
       # The saga verifies PaymentSucceeded events against payment-service before confirming (NFR-SEC-01).
       PAYMENT_SERVICE_URI: http://payment-service:8083
     secretEnv:
+      KAFKA_PASSWORD: KAFKA_BOOKING_SERVICE_PASSWORD
       DB_PASSWORD: BOOKING_DB_PASSWORD
       ADMISSION_TOKEN_KEY: ADMISSION_TOKEN_KEY
       REDIS_PASSWORD: REDIS_PASSWORD
@@ -80,8 +86,11 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Signs in to Kafka as itself (INF-04); see infra/kafka/init-kafka.sh for what it may do.
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
     publicBaseUrlEnv: PUBLIC_BASE_URL
     secretEnv:
+      KAFKA_PASSWORD: KAFKA_PAYMENT_SERVICE_PASSWORD
       DB_PASSWORD: PAYMENT_DB_PASSWORD
       PAYMENT_WEBHOOK_SECRET: PAYMENT_WEBHOOK_SECRET
   ticket-service:
@@ -91,7 +100,10 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Signs in to Kafka as itself (INF-04); see infra/kafka/init-kafka.sh for what it may do.
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
     secretEnv:
+      KAFKA_PASSWORD: KAFKA_TICKET_SERVICE_PASSWORD
       DB_PASSWORD: TICKET_DB_PASSWORD
       TICKET_SIGNING_KEY: TICKET_SIGNING_KEY
   notification-service:
@@ -101,9 +113,12 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Signs in to Kafka as itself (INF-04); see infra/kafka/init-kafka.sh for what it may do.
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
       MAIL_HOST: mailpit
       MAIL_PORT: "1025"
     secretEnv:
+      KAFKA_PASSWORD: KAFKA_NOTIFICATION_SERVICE_PASSWORD
       DB_PASSWORD: NOTIFY_DB_PASSWORD
   waiting-room-service:
     port: 8086
@@ -114,6 +129,11 @@ services:
     secretEnv:
       ADMISSION_TOKEN_KEY: ADMISSION_TOKEN_KEY
       REDIS_PASSWORD: REDIS_PASSWORD
+
+# INF-07: default-deny ingress plus one rule per caller (templates/networkpolicy.yaml). Needs a CNI that
+# enforces NetworkPolicy; kind's kindnet does.
+networkPolicy:
+  enabled: true
 
 # Single-instance infrastructure for a local cluster. In production these would be managed services
 # (RDS, ElastiCache, MSK, a Keycloak cluster) and this section switched off.
@@ -131,7 +151,7 @@ infrastructure:
     image: quay.io/keycloak/keycloak:26.7.4
     nodePort: 30180
   mailpit:
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.4
     nodePort: 30825
 
 # Passwords and keys. Left empty, random values are generated on install and kept on upgrade

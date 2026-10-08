@@ -23,12 +23,19 @@ for module in "${MODULES[@]}"; do
   kind load docker-image "ticket-rush-$module:latest" --name "$CLUSTER" > /dev/null
 done
 
-helm upgrade --install ticketrush deploy/helm/ticketrush --namespace "$NAMESPACE" --create-namespace \
+# INF-06: the API server refuses any pod in the namespace that does not meet Pod Security "restricted".
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl label namespace "$NAMESPACE" --overwrite \
+  pod-security.kubernetes.io/enforce=restricted pod-security.kubernetes.io/warn=restricted > /dev/null
+
+helm upgrade --install ticketrush deploy/helm/ticketrush --namespace "$NAMESPACE" \
   --set images.pullPolicy=Never "$@"
 
 echo "Waiting for every pod to be ready (first start pulls the infrastructure images)..."
 kubectl -n "$NAMESPACE" rollout status statefulset/postgres --timeout=5m
 kubectl -n "$NAMESPACE" rollout status statefulset/kafka --timeout=5m
+# Topics and per-service ACLs (infra/kafka/init-kafka.sh); the Kafka clients wait for them.
+kubectl -n "$NAMESPACE" wait --for=condition=complete job -l app.kubernetes.io/name=kafka-init --timeout=5m
 kubectl -n "$NAMESPACE" rollout status deployment/keycloak --timeout=5m
 for module in "${MODULES[@]}"; do
   kubectl -n "$NAMESPACE" rollout status "deployment/$module" --timeout=8m

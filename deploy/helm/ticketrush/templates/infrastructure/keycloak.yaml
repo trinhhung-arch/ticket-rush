@@ -27,21 +27,35 @@ spec:
       labels:
         {{- include "ticketrush.selector" $ctx | nindent 8 }}
     spec:
+      # The image's user is 1000 in group 0, which owns /opt/keycloak (start rebuilds it on first run).
+      {{- include "ticketrush.podSecurity" (dict "uid" 1000 "gid" 0) | nindent 6 }}
       containers:
         - name: keycloak
           image: {{ .Values.infrastructure.keycloak.image }}
-          args: ["start-dev", "--import-realm"]
+          # Production mode (INF-05), not start-dev: a real database, a fixed hostname, strict checks.
+          args: ["start", "--import-realm"]
           ports:
             - { name: http, containerPort: 8080 }
             - { name: management, containerPort: 9000 }
           env:
             - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/keycloak_db" }
+            - { name: KC_DB_USERNAME, value: keycloak_svc }
+            {{- include "ticketrush.secretEnv" (dict "env" "KC_DB_PASSWORD" "key" "KEYCLOAK_DB_PASSWORD" "root" .) | nindent 12 }}
             # Issuer = the address browsers use; services reach it as http://keycloak:8080.
             - { name: KC_HOSTNAME, value: {{ .Values.publicUrls.keycloak | quote }} }
             - { name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC, value: "true" }
+            # Plain HTTP because the local cluster has no TLS; in production TLS ends at the ingress or
+            # load balancer in front of it (and KC_PROXY_HEADERS is set).
+            - { name: KC_HTTP_ENABLED, value: "true" }
             - { name: KC_HEALTH_ENABLED, value: "true" }
+            # No admin console on the public port; the realm comes from the imported file, and the admin
+            # REST API (kcadm.sh) still works with the admin's credentials.
+            - { name: KC_FEATURES_DISABLED, value: admin }
             {{- include "ticketrush.secretEnv" (dict "env" "KC_BOOTSTRAP_ADMIN_PASSWORD" "key" "KEYCLOAK_ADMIN_PASSWORD" "root" .) | nindent 12 }}
             {{- include "ticketrush.secretEnv" (dict "env" "DEMO_USER_PASSWORD" "key" "DEMO_USER_PASSWORD" "root" .) | nindent 12 }}
+          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
           readinessProbe:
             httpGet: { path: /health/ready, port: management }
             periodSeconds: 5

@@ -1,0 +1,60 @@
+{{- /*
+INF-07: no pod accepts a connection unless a rule here allows it. Only the gateway, Keycloak (browsers
+and the services' key lookups) and the Mailpit web UI take traffic from anywhere; every other pod
+answers only the pods that call it. Egress stays open. Something outside the namespace that needs a
+pod (a Prometheus scraping the services, say) needs its own rule.
+*/ -}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $root := . }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    {{- include "ticketrush.labels" (dict "name" "network-policy" "root" $root) | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+{{- $kafkaClients := list "event-service" "booking-service" "payment-service" "ticket-service" "notification-service" "kafka-init" }}
+{{- $rules := list
+  (dict "to" "api-gateway" "ports" (list "http"))
+  (dict "to" "event-service" "ports" (list "http") "from" (list "api-gateway"))
+  (dict "to" "booking-service" "ports" (list "http") "from" (list "api-gateway"))
+  (dict "to" "payment-service" "ports" (list "http") "from" (list "api-gateway" "booking-service"))
+  (dict "to" "ticket-service" "ports" (list "http") "from" (list "api-gateway"))
+  (dict "to" "waiting-room-service" "ports" (list "http") "from" (list "api-gateway"))
+  (dict "to" "postgres" "ports" (list "postgres") "from" (list "event-service" "booking-service" "payment-service" "ticket-service" "notification-service" "keycloak"))
+  (dict "to" "redis" "ports" (list "redis") "from" (list "api-gateway" "booking-service" "waiting-room-service"))
+  (dict "to" "kafka" "ports" (list "kafka") "from" $kafkaClients)
+  (dict "to" "keycloak" "ports" (list "http"))
+  (dict "to" "mailpit" "name" "mailpit-smtp" "ports" (list "smtp") "from" (list "notification-service"))
+  (dict "to" "mailpit" "name" "mailpit-ui" "ports" (list "http"))
+}}
+{{- range $rules }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-{{ .name | default .to }}
+  labels:
+    {{- include "ticketrush.labels" (dict "name" .to "root" $root) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ticketrush.selector" (dict "name" .to "root" $root) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        {{- range .ports }}
+        - port: {{ . }}
+        {{- end }}
+      {{- if .from }}
+      from:
+        {{- range .from }}
+        - podSelector:
+            matchLabels:
+              {{- include "ticketrush.selector" (dict "name" . "root" $root) | nindent 14 }}
+        {{- end }}
+      {{- end }}
+{{- end }}
+{{- end }}

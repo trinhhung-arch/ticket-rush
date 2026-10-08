@@ -1,0 +1,32 @@
+server:
+  port: ${PORT:8086}
+  # NFR-AVAIL-06: finish in-flight requests on SIGTERM, for at most 30 s.
+  shutdown: graceful
+  tomcat:
+    # Room for a burst of new connections from the gateway. At the default of 100 the kernel
+    # dropped SYNs during the payment outage drill (ListenOverflows), and gateway connects timed out.
+    accept-count: 1024
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  config:
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
+  application:
+    name: waiting-room-service
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16379}
+      password: ${REDIS_PASSWORD:}
+
+ticketrush:
+  waiting-room:
+    capacity: ${WAITING_ROOM_CAPACITY:2000}
+    admission-ttl: PT10M
+    admit-interval: PT1S
+    # Required, no default (NFR-SEC-03); shared with booking-service.
+    token-key: ${ADMISSION_TOKEN_KEY}
