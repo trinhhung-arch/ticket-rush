@@ -124,7 +124,7 @@ services:
   # Identity provider (FR-IAM-01). Tokens carry the issuer http://localhost:8180/realms/ticketrush
   # wherever they were requested; services inside the network fetch signing keys over the back channel.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.4
+    image: quay.io/keycloak/keycloak:26.8.0
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
