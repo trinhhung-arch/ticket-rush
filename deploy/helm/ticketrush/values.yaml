@@ -131,7 +131,7 @@ infrastructure:
     image: quay.io/keycloak/keycloak:26.7.4
     nodePort: 30180
   mailpit:
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.4
     nodePort: 30825
 
 # Passwords and keys. Left empty, random values are generated on install and kept on upgrade
