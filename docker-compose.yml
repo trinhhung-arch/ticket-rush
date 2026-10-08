@@ -37,7 +37,7 @@ x-jwt: &jwt
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     # Five services with their own pools: 50 + 30 + 20 + 20 + 10 connections at most.
     command: ["postgres", "-c", "max_connections=200"]
     environment:
