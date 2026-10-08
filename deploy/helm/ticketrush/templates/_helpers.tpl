@@ -25,3 +25,30 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
       name: {{ include "ticketrush.secretName" .root }}
       key: {{ .key }}
 {{- end }}
+
+{{- /*
+Pod-level security for every pod (INF-06, INF-08), so the namespace passes Pod Security "restricted":
+a fixed non-root user, the runtime's default seccomp profile and no Kubernetes API token, which no
+pod here needs. Takes the image's own uid and gid.
+*/}}
+{{- define "ticketrush.podSecurity" -}}
+automountServiceAccountToken: false
+securityContext:
+  runAsNonRoot: true
+  runAsUser: {{ .uid }}
+  runAsGroup: {{ .gid }}
+  fsGroup: {{ .gid }}
+  seccompProfile:
+    type: RuntimeDefault
+{{- end }}
+
+{{/* Container-level security (INF-06): no privilege escalation and no Linux capabilities. */}}
+{{- define "ticketrush.containerSecurity" -}}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  {{- if .readOnlyRootFilesystem }}
+  readOnlyRootFilesystem: true
+  {{- end }}
+{{- end }}

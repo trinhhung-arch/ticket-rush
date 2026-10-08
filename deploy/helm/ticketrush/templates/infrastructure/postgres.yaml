@@ -28,6 +28,8 @@ spec:
       labels:
         {{- include "ticketrush.selector" $ctx | nindent 8 }}
     spec:
+      # The image's postgres user (70); the entrypoint supports running without root.
+      {{- include "ticketrush.podSecurity" (dict "uid" 70 "gid" 70) | nindent 6 }}
       containers:
         - name: postgres
           image: {{ .Values.infrastructure.postgres.image }}
@@ -37,7 +39,7 @@ spec:
           env:
             - { name: POSTGRES_USER, value: postgres }
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
-            {{- range list "POSTGRES_PASSWORD" "EVENT_DB_PASSWORD" "BOOKING_DB_PASSWORD" "PAYMENT_DB_PASSWORD" "TICKET_DB_PASSWORD" "NOTIFY_DB_PASSWORD" }}
+            {{- range list "POSTGRES_PASSWORD" "EVENT_DB_PASSWORD" "BOOKING_DB_PASSWORD" "PAYMENT_DB_PASSWORD" "TICKET_DB_PASSWORD" "NOTIFY_DB_PASSWORD" "KEYCLOAK_DB_PASSWORD" }}
             {{- include "ticketrush.secretEnv" (dict "env" . "key" . "root" $) | nindent 12 }}
             {{- end }}
           readinessProbe:
@@ -45,6 +47,7 @@ spec:
             periodSeconds: 5
           resources:
             requests: { cpu: 100m, memory: 256Mi }
+          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
           volumeMounts:
             - { name: data, mountPath: /var/lib/postgresql/data }
             - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
