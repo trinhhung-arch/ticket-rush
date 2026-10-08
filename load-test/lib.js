@@ -1,9 +1,30 @@
 // Helpers shared by the k6 scripts.
 import http from 'k6/http';
 import { sleep } from 'k6';
+import crypto from 'k6/crypto';
+import encoding from 'k6/encoding';
 
 export const GATEWAY = __ENV.GATEWAY || 'http://localhost:8080';
 export const ORGANIZER = 'organizer-load-test';
+const SECRET = __ENV.LOAD_TEST_JWT_SECRET;
+
+/**
+ * An "Authorization: Bearer ..." value for any user id, signed like the load-test issuer expects.
+ * The stack must be started with load-test/compose.yml layered on, or every request gets 401.
+ */
+export function bearer(subject, roles = ['CUSTOMER']) {
+  if (!SECRET) {
+    throw new Error('LOAD_TEST_JWT_SECRET is not set: pass -e LOAD_TEST_JWT_SECRET=... (see load-test/README.md)');
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const header = encoding.b64encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }), 'rawurl');
+  const payload = encoding.b64encode(JSON.stringify({
+    iss: 'ticketrush-load-test', aud: 'ticketrush-api', sub: subject, email: `${subject}@example.com`,
+    roles, iat: now, exp: now + 3600,
+  }), 'rawurl');
+  const signature = crypto.hmac('sha256', SECRET, `${header}.${payload}`, 'base64rawurl');
+  return `Bearer ${header}.${payload}.${signature}`;
+}
 
 export function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -36,7 +57,7 @@ export function seatCodes() {
 
 /** Creates and publishes an event, then waits until booking-service has its seat map. */
 export function createEvent(name, waitingRoom = false) {
-  const headers = { 'Content-Type': 'application/json', 'X-User-Id': ORGANIZER };
+  const headers = { 'Content-Type': 'application/json', Authorization: bearer(ORGANIZER, ['CUSTOMER', 'ORGANIZER']) };
   const created = http.post(`${GATEWAY}/api/events`, JSON.stringify({
     name, venue: 'Sân vận động Mỹ Đình', city: 'Hanoi',
     startsAt: iso(30 * 24 * 3600 * 1000), salesOpenAt: iso(-3600 * 1000),

@@ -8,3 +8,5 @@ docs
 load-test
 scripts
 .env
+infra
+deploy
