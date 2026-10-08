@@ -11,7 +11,7 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s
   config:
-    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,classpath:ticketrush-messaging.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
   application:
     name: booking-service
   threads:
@@ -48,6 +48,9 @@ spring:
 
 
 ticketrush:
+  kafka:
+    # Kafka password when started from the IDE, read from .env (containers get KAFKA_PASSWORD).
+    password: ${KAFKA_BOOKING_SERVICE_PASSWORD:}
   security:
     # The live seat map is part of browsing an event; everything else needs a customer token.
     public-paths:

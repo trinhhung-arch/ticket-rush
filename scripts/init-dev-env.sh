@@ -31,6 +31,18 @@ add ADMISSION_TOKEN_KEY "$(secret 32)"
 add PAYMENT_WEBHOOK_SECRET "$(secret 32)"
 add KEYCLOAK_ADMIN_PASSWORD "$(secret 16)"
 add GRAFANA_ADMIN_PASSWORD "$(secret 16)"
+# Kafka accounts (SASL/PLAIN): the admin that sets up topics and ACLs, one per service, Kafka UI.
+add KAFKA_ADMIN_PASSWORD "$(secret 24)"
+add KAFKA_EVENT_SERVICE_PASSWORD "$(secret 24)"
+add KAFKA_BOOKING_SERVICE_PASSWORD "$(secret 24)"
+add KAFKA_PAYMENT_SERVICE_PASSWORD "$(secret 24)"
+add KAFKA_TICKET_SERVICE_PASSWORD "$(secret 24)"
+add KAFKA_NOTIFICATION_SERVICE_PASSWORD "$(secret 24)"
+add KAFKA_UI_PASSWORD "$(secret 24)"
+# Kafka UI's own login page (user admin).
+add KAFKA_UI_LOGIN_PASSWORD "$(secret 16)"
+# A service started from the IDE signs in to Kafka on localhost:9094 like the containers do.
+add KAFKA_SECURITY_PROTOCOL SASL_PLAINTEXT
 # Password of the demo accounts (organizer@, admin@, alice@, bob@, chi@, dung@ticketrush.dev).
 add DEMO_USER_PASSWORD "$(secret 8)"
 # Signs the tokens k6 mints; only trusted when load-test/compose.yml is layered on (see load-test/README).
