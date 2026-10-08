@@ -307,7 +307,7 @@ services:
 
   # --- Observability (phase 3) ---
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.161.0
+    image: otel/opentelemetry-collector-contrib:0.161.0-386
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports: ["127.0.0.1:4318:4318"]
