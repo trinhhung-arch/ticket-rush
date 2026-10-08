@@ -11,7 +11,7 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s
   config:
-    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,classpath:ticketrush-messaging.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
   application:
     name: payment-service
   threads:
@@ -42,6 +42,9 @@ spring:
 
 
 ticketrush:
+  kafka:
+    # Kafka password when started from the IDE, read from .env (containers get KAFKA_PASSWORD).
+    password: ${KAFKA_PAYMENT_SERVICE_PASSWORD:}
   payment:
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
     webhook:

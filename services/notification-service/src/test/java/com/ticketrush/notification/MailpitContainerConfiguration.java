@@ -11,7 +11,7 @@ class MailpitContainerConfiguration {
 
     @Bean
     GenericContainer<?> mailpit() {
-        return new GenericContainer<>("axllent/mailpit:latest").withExposedPorts(1025, 8025);
+        return new GenericContainer<>("axllent/mailpit:v1.31.4").withExposedPorts(1025, 8025);
     }
 
     @Bean

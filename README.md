@@ -103,13 +103,15 @@ Tài khoản demo (mật khẩu là `DEMO_USER_PASSWORD` trong `.env`): `organiz
 | http://localhost:8080 | API Gateway, cổng vào duy nhất |
 | http://localhost:8080/swagger-ui.html | Swagger UI cho mọi service; nút Authorize đăng nhập Keycloak (PKCE) |
 | http://localhost:8180 | Keycloak, realm `ticketrush` (admin: `admin` / `KEYCLOAK_ADMIN_PASSWORD`) |
-| http://localhost:8090 | Kafka UI: xem topic `event.events` và các topic `-dlt` |
+| http://localhost:8090 | Kafka UI, chỉ đọc (đăng nhập `admin` / `KAFKA_UI_LOGIN_PASSWORD`): xem topic và các topic `-dlt` |
 | http://localhost:8025 | Mailpit: hộp thư test, xem email vé kèm mã QR |
 | http://localhost:3000 | Grafana: dashboard "TicketRush: tổng quan", không cần đăng nhập |
 | http://localhost:16686 | Jaeger: trace của từng request, xuyên qua Kafka |
 | http://localhost:9090/alerts | Prometheus: 4 luật cảnh báo |
 
-Postgres (15432), Redis (16379) và Kafka (9094) cũng được mở ra máy host, ở cổng khác mặc định để không đụng database khác trên máy; chạy một service từ IDE là tự kết nối vào stack này. Nếu cổng 8080 đã bận, sinh `.env` bằng `GATEWAY_PORT=18080 ./scripts/init-dev-env.sh` và gọi `GATEWAY=http://localhost:18080 ./scripts/smoke-test.sh`.
+Postgres (15432), Redis (16379) và Kafka (9094) cũng được mở ra máy host, ở cổng khác mặc định để không đụng database khác trên máy; chạy một service từ IDE là tự kết nối vào stack này.
+Kafka bắt đăng nhập (SASL): mỗi service có tài khoản riêng trong `.env`, và ACL chỉ cho nó ghi topic của mình, đọc topic nó cần (ADR 0009).
+`./scripts/check-kafka-acls.sh` thử lại các đòn tấn công cũ: đọc trộm `ticket.events`, giả sự kiện thanh toán, vào không mật khẩu. Nếu cổng 8080 đã bận, sinh `.env` bằng `GATEWAY_PORT=18080 ./scripts/init-dev-env.sh` và gọi `GATEWAY=http://localhost:18080 ./scripts/smoke-test.sh`.
 
 ## Chạy trên Kubernetes
 
@@ -125,6 +127,9 @@ Cần thêm `kind`, `helm` và `kubectl`. Helm chart nằm ở `deploy/helm/tick
 - Mỗi service có readiness/liveness/startup probe, PodDisruptionBudget, `preStop` 5 giây và graceful shutdown.
 - Mật khẩu và khoá được **sinh ngẫu nhiên thành K8s Secret** khi cài lần đầu, và được giữ nguyên khi `helm upgrade`.
 - Postgres, Redis, Kafka, Keycloak và Mailpit cài kèm trong chart. Khi lên môi trường thật thì tắt bằng `infrastructure.enabled=false` và dùng dịch vụ managed.
+- Namespace bật Pod Security **"restricted"**: mọi pod chạy không phải root, bỏ mọi capability, seccomp `RuntimeDefault`, không mang token service account; service Java có root filesystem chỉ đọc.
+- **NetworkPolicy** chặn mặc định, chỉ mở đúng đường cần (gateway tới service, service tới database/Redis/Kafka của nó). Chỉ gateway, Keycloak và giao diện Mailpit nhận kết nối từ ngoài.
+- Keycloak chạy chế độ **production** (`start`) trên database riêng, không có admin console; Kafka đòi đăng nhập với ACL theo service, như trong compose (ADR 0009).
 - Gateway ở http://localhost:28080, Keycloak ở :28180, Mailpit ở :28025. Smoke test chạy được nguyên trên cụm này (lệnh in ra cuối `up.sh`).
 
 Diễn tập trên cụm kind, tải đọc đều 100 request/giây (NFR-AVAIL-04, NFR-AVAIL-06):
@@ -294,11 +299,12 @@ deploy/helm/ticketrush/   Helm chart: 7 service x 2 instance, hạ tầng, Secre
 deploy/kind/              cụm kind 3 node và script dựng
 infra/keycloak/           realm ticketrush: vai trò, client, tài khoản demo
 infra/postgres/           tạo database và role riêng cho từng service
+infra/kafka/              tạo topic và ACL theo từng service
 infra/otel-collector/     nhận OTLP, chuyển trace sang Jaeger, log sang Loki
 infra/prometheus/         scrape và luật cảnh báo
 infra/grafana/            datasource và dashboard nạp sẵn
 docs/adr/                 các quyết định kiến trúc
-scripts/                  smoke test end-to-end, đối soát cuối đợt, kiểm tra bán trùng
+scripts/                  smoke test end-to-end, đối soát cuối đợt, kiểm tra bán trùng, kiểm tra ACL Kafka
 ```
 
 ## Quyết định kiến trúc
@@ -311,6 +317,7 @@ scripts/                  smoke test end-to-end, đối soát cuối đợt, ki�
 - [ADR 0006: Keycloak cấp JWT, Gateway và từng service đều kiểm tra](docs/adr/0006-keycloak-jwt-checked-at-gateway-and-services.md)
 - [ADR 0007: Circuit breaker ở Gateway, webhook ký HMAC](docs/adr/0007-resilience-and-signed-webhooks.md)
 - [ADR 0008: Cấu trúc source: services/ và libs/, một bộ package chung, kiểm bằng ArchUnit](docs/adr/0008-source-layout-services-libs-and-package-rules.md)
+- [ADR 0009: Siết hạ tầng: Kafka đăng nhập và ACL theo service, Keycloak production, pod "restricted", NetworkPolicy](docs/adr/0009-infrastructure-hardening.md)
 
 ## Tham khảo
 

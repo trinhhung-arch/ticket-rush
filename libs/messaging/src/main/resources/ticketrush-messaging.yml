@@ -1,0 +1,12 @@
+# Kafka sign-in, imported by every service that uses Kafka (spring.config.import), INF-03 and INF-04.
+# In docker compose and Kubernetes KAFKA_SECURITY_PROTOCOL is SASL_PLAINTEXT and each service signs in
+# as itself: user = spring.application.name, password from KAFKA_PASSWORD (or ticketrush.kafka.password
+# when started from the IDE). infra/kafka/init-kafka.sh grants each account its topics. Tests run a
+# broker without SASL, so the default stays PLAINTEXT and the JAAS settings go unused.
+spring:
+  kafka:
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+    properties:
+      sasl.mechanism: PLAIN
+      sasl.jaas.config: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="${KAFKA_USERNAME:${spring.application.name}}" password="${KAFKA_PASSWORD:${ticketrush.kafka.password:}}";'

@@ -11,7 +11,7 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 30s
   config:
-    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
+    import: classpath:ticketrush-observability.yml,classpath:ticketrush-security.yml,classpath:ticketrush-messaging.yml,optional:file:.env[.properties],optional:file:../../.env[.properties]
   application:
     name: event-service
   threads:
@@ -41,6 +41,9 @@ spring:
 
 
 ticketrush:
+  kafka:
+    # Kafka password when started from the IDE, read from .env (containers get KAFKA_PASSWORD).
+    password: ${KAFKA_EVENT_SERVICE_PASSWORD:}
   security:
     # Browsing the catalogue needs no account (FR-EVT-03); changing it needs ORGANIZER.
     public-paths:

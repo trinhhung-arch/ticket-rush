@@ -39,8 +39,11 @@ spec:
                 labelSelector:
                   matchLabels:
                     {{- include "ticketrush.selector" $ctx | nindent 20 }}
-      securityContext:
-        runAsNonRoot: true
+      # The image's user (Dockerfile: 10001); read-only root filesystem with a writable /tmp (INF-09).
+      {{- include "ticketrush.podSecurity" (dict "uid" 10001 "gid" 10001) | nindent 6 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: {{ $name }}
           image: "{{ $root.Values.images.prefix }}{{ $name }}:{{ $root.Values.images.tag }}"
@@ -80,8 +83,9 @@ spec:
             {{- end }}
           resources:
             {{- toYaml ($svc.resources | default $root.Values.service.resources) | nindent 12 }}
-          securityContext:
-            allowPrivilegeEscalation: false
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
           {{- $probePort := ternary "mgmt" "http" (hasKey $svc "managementPort") }}
           startupProbe:
             httpGet: { path: /actuator/health/liveness, port: {{ $probePort }} }
