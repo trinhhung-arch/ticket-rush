@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Walks the whole booking saga through the gateway: an organizer publishes an event, a customer
 # holds seats, pays through the mock gateway and receives QR tickets by email; a second customer
-# is declined and loses the hold. Needs curl and jq.
+# is declined and loses the hold. Then a waiting-room event and the booking rate limit. Needs curl and jq.
 #   docker compose up -d --build && ./scripts/smoke-test.sh
 set -euo pipefail
 
@@ -110,5 +110,45 @@ wait_for_status chi "$chi_booking" CANCELLED
 booking chi "$chi_booking" | jq -c '{status, cancelReason}'
 sleep 1
 curl -sf "$GATEWAY/api/events/$event_id/seats" | jq -c '[.seats[] | select(.code == "VIP-B-01") | {code, state}][0]'
+
+step "13. A sell-out event uses the waiting room; booking without an admission token is refused (FR-WR-03)"
+hot_event=$(curl -sf -X POST "$GATEWAY/api/events" -H "X-User-Id: $ORGANIZER" -H 'Content-Type: application/json' -d @- <<JSON | jq -r .id
+{
+  "name": "TicketRush Live: đêm cuối",
+  "venue": "Sân vận động Mỹ Đình",
+  "city": "Hanoi",
+  "startsAt": "$(utc +31d '+31 days')",
+  "salesOpenAt": "$(utc -1H '-1 hour')",
+  "waitingRoom": true,
+  "sections": [{"code": "GA", "name": "Standard", "rows": 5, "seatsPerRow": 20, "priceVnd": 800000}]
+}
+JSON
+)
+curl -sf -X POST "$GATEWAY/api/events/$hot_event/publish" -H "X-User-Id: $ORGANIZER" > /dev/null
+for _ in $(seq 1 30); do
+  curl -sf "$GATEWAY/api/events/$hot_event/seats" > /dev/null && break
+  sleep 1
+done
+book_hot() { # user [admission-token]
+  curl -s -w '\nHTTP %{http_code}\n' -X POST "$GATEWAY/api/bookings" \
+    -H "X-User-Id: $1" -H "Idempotency-Key: $(uuid)" -H "X-Admission-Token: ${2:-}" -H 'Content-Type: application/json' \
+    -d "{\"eventId\":\"$hot_event\",\"seatCodes\":[\"GA-A-01\"],\"email\":\"$1@example.com\"}"
+}
+book_hot dung | show '{status, detail, joinQueue}'
+
+step "14. Dung joins the queue; the room has space, so he is admitted with a token (FR-WR-01)"
+token=$(curl -sf -X POST "$GATEWAY/api/queue/events/$hot_event/join" -H 'X-User-Id: dung' | tee /tmp/ticketrush-queue.json | jq -r .admissionToken)
+jq -c '{state, position, admittedUntil, admissionToken: (.admissionToken[0:24] + "...")}' /tmp/ticketrush-queue.json
+
+step "15. With the token his booking goes through"
+book_hot dung "$token" | show '{id, status}'
+
+step "16. A bot fires 20 booking requests at once: the gateway lets about 10 through per second (FR-GW-02)"
+codes=$(for _ in $(seq 1 20); do
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST "$GATEWAY/api/bookings" -H 'X-User-Id: bot' \
+    -H "Idempotency-Key: $(uuid)" -H 'Content-Type: application/json' -d '{}' &
+done; wait)
+echo "$codes" | sort | uniq -c | awk '{printf "  %s x HTTP %s\n", $1, $2}'
+echo "$codes" | grep -q 429 || fail "no request was rate limited"
 
 printf '\n\033[32mAll steps passed.\033[0m\n'

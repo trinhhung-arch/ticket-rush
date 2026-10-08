@@ -99,18 +99,6 @@ public class Booking {
         return status == BookingStatus.PENDING || status == BookingStatus.AWAITING_PAYMENT;
     }
 
-    /** @return false when the booking has already moved past PENDING, e.g. it expired first */
-    boolean awaitPayment(UUID paymentId, String checkoutUrl, Instant now) {
-        if (status != BookingStatus.PENDING) {
-            return false;
-        }
-        this.paymentId = paymentId;
-        this.checkoutUrl = checkoutUrl;
-        this.status = BookingStatus.AWAITING_PAYMENT;
-        this.updatedAt = now;
-        return true;
-    }
-
     void confirm(UUID paymentId, Instant now) {
         requireOpen();
         this.paymentId = paymentId;

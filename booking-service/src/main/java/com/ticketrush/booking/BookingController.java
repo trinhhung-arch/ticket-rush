@@ -35,19 +35,22 @@ class BookingController {
     }
 
     private final BookingService bookings;
+    private final BookingSaga saga;
 
-    BookingController(BookingService bookings) {
+    BookingController(BookingService bookings, BookingSaga saga) {
         this.bookings = bookings;
+        this.saga = saga;
     }
 
     /** 201 for a new booking, 200 when the same Idempotency-Key is replayed. */
     @PostMapping
     ResponseEntity<BookingView> create(@RequestHeader(RequestHeaders.USER_ID) String userId,
                                        @RequestHeader(RequestHeaders.IDEMPOTENCY_KEY) @Size(min = 8, max = 100) String idempotencyKey,
+                                       @RequestHeader(value = AdmissionTokens.HEADER, required = false) String admissionToken,
                                        @Valid @RequestBody CreateBookingRequest request,
                                        UriComponentsBuilder uri) {
         BookingService.Result result = bookings.create(new CreateBooking(
-                userId, idempotencyKey, request.eventId(), request.seatCodes(), request.email()));
+                userId, idempotencyKey, request.eventId(), request.seatCodes(), request.email(), admissionToken));
         if (!result.created()) {
             return ResponseEntity.ok(result.booking());
         }
@@ -59,6 +62,12 @@ class BookingController {
     PageResponse<BookingView> mine(@RequestHeader(RequestHeaders.USER_ID) String userId,
                                    @PageableDefault(size = 20) Pageable pageable) {
         return PageResponse.of(bookings.listForUser(userId, pageable));
+    }
+
+    /** FR-BKG-06: give up an unpaid booking; its seats are released at once. */
+    @PostMapping("/{id}/cancel")
+    BookingView cancel(@RequestHeader(RequestHeaders.USER_ID) String userId, @PathVariable UUID id) {
+        return saga.cancelByCustomer(id, userId);
     }
 
     @GetMapping("/{id}")

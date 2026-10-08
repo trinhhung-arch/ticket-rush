@@ -31,7 +31,7 @@ import com.ticketrush.common.messaging.Topics;
  * Shared Spring context (one set of containers) and helpers for booking-service integration tests.
  * Tracing and metrics are on, as in production, so the observability tests share this context.
  */
-@SpringBootTest
+@SpringBootTest(properties = "ticketrush.booking.admission-token-key=" + BookingTestSupport.ADMISSION_KEY)
 @AutoConfigureMockMvc
 @AutoConfigureTracing
 @AutoConfigureMetrics
@@ -44,6 +44,8 @@ abstract class BookingTestSupport {
             new SectionSpec("GA", "Standard", 2, 5, 800_000));
 
     static final Duration WAIT = Duration.ofSeconds(30);
+
+    static final String ADMISSION_KEY = "test-admission-key-0123456789-0123456789";
 
     @Autowired
     BookingService bookingService;
@@ -62,9 +64,14 @@ abstract class BookingTestSupport {
 
     /** Publishes an event the way event-service would and waits until its 16 seats are in the inventory. */
     UUID publishEvent(Instant salesOpenAt) {
+        return publishEvent(salesOpenAt, false);
+    }
+
+    UUID publishEvent(Instant salesOpenAt, boolean waitingRoom) {
         UUID eventId = UUID.randomUUID();
         send(Topics.EVENT_EVENTS, eventId, UUID.randomUUID(), new EventPublished(EventPublished.CURRENT_VERSION, eventId,
-                "Rock Night", "Mỹ Đình", "Hanoi", Instant.now().plus(30, ChronoUnit.DAYS), salesOpenAt, SECTIONS));
+                "Rock Night", "Mỹ Đình", "Hanoi", Instant.now().plus(30, ChronoUnit.DAYS), salesOpenAt, SECTIONS,
+                waitingRoom));
         await().atMost(WAIT).until(() -> jdbc.sql("select count(*) from seat_inventory where event_id = :id")
                 .param("id", eventId).query(Integer.class).single() == 16);
         return eventId;
@@ -84,7 +91,7 @@ abstract class BookingTestSupport {
     }
 
     static CreateBooking booking(String user, UUID eventId, String... seats) {
-        return new CreateBooking(user, UUID.randomUUID().toString(), eventId, List.of(seats), user + "@example.com");
+        return new CreateBooking(user, UUID.randomUUID().toString(), eventId, List.of(seats), user + "@example.com", null);
     }
 
     BookingStatus statusOf(UUID bookingId) {

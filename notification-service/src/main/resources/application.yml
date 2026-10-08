@@ -25,6 +25,9 @@ spring:
     consumer:
       group-id: ${spring.application.name}
       auto-offset-reset: earliest
+    listener:
+      # One consumer thread per partition (topics have 12, see MessagingConfig).
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:12}
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}

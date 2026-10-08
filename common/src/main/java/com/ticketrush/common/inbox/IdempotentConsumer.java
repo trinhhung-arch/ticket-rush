@@ -1,7 +1,6 @@
 package com.ticketrush.common.inbox;
 
-import java.time.Instant;
-
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,25 +9,28 @@ import com.ticketrush.common.messaging.IncomingMessage;
 
 /**
  * Idempotent Consumer: records each message id in the handler's own transaction, so a redelivered
- * message is recognised and skipped (NFR-CORR-03). If two deliveries race, the primary key rejects
- * the second commit and the retry then sees the id.
+ * message is recognised and skipped (NFR-CORR-03). One statement: if another delivery of the same
+ * message is in flight, the insert waits for it and then either conflicts or goes through.
  */
 @Component
 public class IdempotentConsumer {
 
-    private final ProcessedMessageRepository repository;
+    private final JdbcClient jdbc;
 
-    public IdempotentConsumer(ProcessedMessageRepository repository) {
-        this.repository = repository;
+    public IdempotentConsumer(JdbcClient jdbc) {
+        this.jdbc = jdbc;
     }
 
     /** @return true the first time this message is seen; call it before applying any change */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean firstDelivery(IncomingMessage message) {
-        if (repository.existsById(message.id())) {
-            return false;
-        }
-        repository.save(new ProcessedMessage(message.id(), message.type(), Instant.now()));
-        return true;
+        return jdbc.sql("""
+                        insert into processed_message (message_id, message_type, processed_at)
+                        values (:id, :type, now())
+                        on conflict do nothing
+                        """)
+                .param("id", message.id())
+                .param("type", message.type())
+                .update() == 1;
     }
 }

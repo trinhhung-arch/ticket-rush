@@ -23,9 +23,13 @@ import tools.jackson.core.JacksonException;
 @EnableScheduling
 public class MessagingConfig {
 
-    /** Creates every topic (and its dead letter topic) up front so partition counts are explicit (NFR-SCAL-02). */
+    /**
+     * Creates every topic (and its dead letter topic) up front so partition counts are explicit
+     * (NFR-SCAL-02). 12 partitions leave room for 6 listener threads on each of 2 instances; a flash
+     * sale's 10,000 payment events drained too slowly on 3.
+     */
     @Bean
-    KafkaAdmin.NewTopics ticketRushTopics(@Value("${ticketrush.kafka.partitions:3}") int partitions,
+    KafkaAdmin.NewTopics ticketRushTopics(@Value("${ticketrush.kafka.partitions:12}") int partitions,
                                           @Value("${ticketrush.kafka.replicas:1}") int replicas) {
         return new KafkaAdmin.NewTopics(Topics.ALL.stream()
                 .flatMap(topic -> Stream.of(topic, topic + Topics.DEAD_LETTER_SUFFIX))
