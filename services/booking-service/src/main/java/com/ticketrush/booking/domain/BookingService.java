@@ -164,8 +164,18 @@ public class BookingService {
             if (!existing.userId().equals(command.userId())) {
                 throw ApiException.conflict("Idempotency-Key is already used by another request");
             }
+            // BIZ-07: a key names one request. Replaying the booking for other seats would tell the client
+            // that seats it never got are held.
+            if (!isSameRequest(existing, command)) {
+                throw ApiException.unprocessable("Idempotency-Key was already used with a different request body");
+            }
             return new Result(BookingView.of(existing), false);
         });
+    }
+
+    private static boolean isSameRequest(Booking existing, CreateBooking command) {
+        return existing.eventId().equals(command.eventId())
+                && existing.seatCodes().stream().sorted().toList().equals(command.seatCodes().stream().sorted().toList());
     }
 
     private static List<String> distinctSeatCodes(List<String> seatCodes) {

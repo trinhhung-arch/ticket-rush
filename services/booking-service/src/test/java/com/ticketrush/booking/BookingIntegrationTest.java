@@ -116,6 +116,27 @@ class BookingIntegrationTest extends BookingTestSupport {
                 .as("missing Idempotency-Key").hasStatus(HttpStatus.BAD_REQUEST);
     }
 
+    /** BIZ-07: a key names one request; reused for other seats or another event it is refused, not replayed. */
+    @Test
+    void anIdempotencyKeyReusedWithAnotherBodyIsRefused() {
+        UUID eventId = publishEventOnSale();
+        String key = "reuse-" + eventId;
+        assertThat(postBooking("an", key, """
+                {"eventId":"%s","seatCodes":["GA-A-03","GA-A-04"]}
+                """.formatted(eventId))).hasStatus(HttpStatus.CREATED);
+
+        assertThat(postBooking("an", key, """
+                {"eventId":"%s","seatCodes":["GA-A-04","GA-A-03"]}
+                """.formatted(eventId))).as("same seats, other order").hasStatusOk();
+        assertThat(postBooking("an", key, """
+                {"eventId":"%s","seatCodes":["GA-A-05"]}
+                """.formatted(eventId))).as("other seats").hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(postBooking("an", key, """
+                {"eventId":"%s","seatCodes":["GA-A-03","GA-A-04"]}
+                """.formatted(UUID.randomUUID()))).as("another event").hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(bookingsContaining(eventId, "GA-A-05")).isZero();
+    }
+
     /** FR-IAM-01: holding seats needs a customer token; the booking is tied to the token's subject and email. */
     @Test
     void bookingNeedsACustomerToken() {

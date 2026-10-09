@@ -50,7 +50,7 @@ class BookingController {
         this.saga = saga;
     }
 
-    /** 201 for a new booking, 200 when the same Idempotency-Key is replayed. */
+    /** 201 for a new booking, 200 when the same request is replayed with its Idempotency-Key, 422 for a reused key. */
     @PostMapping
     ResponseEntity<BookingView> create(Caller caller,
                                        @RequestHeader(RequestHeaders.IDEMPOTENCY_KEY) @Size(min = 8, max = 100) String idempotencyKey,
