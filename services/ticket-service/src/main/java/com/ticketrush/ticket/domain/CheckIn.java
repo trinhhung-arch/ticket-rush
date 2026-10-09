@@ -40,11 +40,13 @@ public class CheckIn {
 
     @Transactional
     public Admitted scan(Caller staff, UUID eventId, String qrToken) {
-        UUID ticketId = tokens.verify(qrToken)
-                .orElseThrow(() -> ApiException.unprocessable("Not a genuine TicketRush QR code").with("result", "INVALID"));
+        // Permission before the code (QR-06): checked the other way round, any organizer could ask about an
+        // event they do not run and learn from 403 or 422 whether a QR code is genuine.
         if (!staff.isAdmin() && !organizers.organizerOf(eventId).map(staff.id()::equals).orElse(false)) {
             throw ApiException.forbidden("Only the organizer of event %s can check its tickets in".formatted(eventId));
         }
+        UUID ticketId = tokens.verify(qrToken)
+                .orElseThrow(() -> ApiException.unprocessable("Not a genuine TicketRush QR code").with("result", "INVALID"));
         Ticket ticket = tickets.findById(ticketId)
                 .orElseThrow(() -> ApiException.notFound("Ticket %s not found".formatted(ticketId)));
         if (!ticket.eventId().equals(eventId)) {
