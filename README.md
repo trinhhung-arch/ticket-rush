@@ -206,7 +206,7 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 | GET | `/api/events?city=&from=&to=&page=&size=` | công khai | FR-EVT-03: tối đa 50 mục một trang |
 | GET | `/api/events/{id}` | công khai | FR-EVT-04; bản nháp chỉ chủ sự kiện thấy |
 | GET | `/api/events/{id}/seats` | công khai | FR-BKG-01: sơ đồ ghế AVAILABLE / HELD / SOLD |
-| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | CUSTOMER | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; vé gửi tới email của tài khoản; rate limit 10 req/s mỗi người (FR-GW-02) |
+| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | CUSTOMER | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; vé gửi tới email của tài khoản; rate limit 10 req/s mỗi người (FR-GW-02). Gửi lại đúng request với cùng key thì 200 kèm booking cũ; dùng lại key cho ghế hoặc sự kiện khác thì 422 |
 | POST | `/api/bookings/{id}/cancel` | CUSTOMER, chủ booking | FR-BKG-06: khách tự huỷ booking chưa thanh toán |
 | GET | `/api/bookings` | CUSTOMER | FR-BKG-08: booking của tôi, mới nhất trước, kèm lý do huỷ |
 | GET | `/api/bookings/{id}` | CUSTOMER, chủ booking | Trạng thái và `checkoutUrl` |
@@ -214,7 +214,7 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 | POST | `/api/payments/webhooks/mock-gateway` | chữ ký `X-Webhook-Signature` | FR-PAY-03, FR-PAY-04: HMAC-SHA256 trên timestamp và body; sai chữ ký hoặc cũ hơn 5 phút thì 401 |
 | GET | `/api/payments/{id}`, `/api/payments?bookingId=` | CUSTOMER, chủ thanh toán | |
 | GET | `/api/tickets?bookingId=` | CUSTOMER | FR-TKT-02: vé của tôi, `qrToken` để app vẽ mã QR |
-| POST | `/api/tickets/check-in` body `{"eventId", "qrToken"}` | ORGANIZER của sự kiện, ADMIN | FR-TKT-03: 200 ADMITTED lần đầu; 409 ALREADY_USED kèm giờ check-in lần đầu |
+| POST | `/api/tickets/check-in` body `{"eventId", "qrToken"}` | ORGANIZER của sự kiện, ADMIN | FR-TKT-03: 200 ADMITTED lần đầu; 409 ALREADY_USED kèm giờ check-in lần đầu. Không phải ban tổ chức của sự kiện thì 403 trước khi mã QR được kiểm, nên không dò được mã nào là thật |
 | POST | `/api/queue/events/{id}/join` | CUSTOMER | FR-WR-01: vào ngay nếu còn chỗ, không thì nhận vị trí; khi vào được thì có `admissionToken` |
 | GET | `/api/queue/events/{id}/status`, `/stream` (SSE) | CUSTOMER | FR-WR-02: vị trí và thời gian chờ ước tính, đẩy mỗi 2 giây |
 
@@ -223,6 +223,7 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 | Yêu cầu | Cách làm |
 |---|---|
 | Xác thực, phân quyền (FR-IAM-01, NFR-SEC-01) | Keycloak cấp JWT với `aud=ticketrush-api` và claim `roles`. Gateway từ chối sớm token không hợp lệ; mỗi service tự kiểm chữ ký, issuer, audience, hạn và vai trò. Vai trò được kiểm trước khi đọc body. |
+| Mật khẩu (AUTH-13) | Ai cũng tự đăng ký được, nên realm đòi mật khẩu 15–128 ký tự, không trùng email, không ép kiểu ký tự (theo NIST SP 800-63B-4); Keycloak khoá tạm khi đoán sai liên tục. Keycloak chỉ import realm lúc tạo lần đầu: trên compose chạy `docker compose up -d --force-recreate keycloak`, trên cụm Helm đã cài thì đặt bằng `kcadm.sh update realms/ticketrush -s passwordPolicy=...` |
 | Webhook (FR-PAY-04, NFR-SEC-02) | `X-Webhook-Signature: t=…,v1=HMAC-SHA256(secret, "t.body")`, so sánh thời gian hằng, cửa sổ 5 phút ([ADR 0007](docs/adr/0007-resilience-and-signed-webhooks.md)) |
 | Không lộ bí mật (NFR-SEC-03) | `.env` sinh ngẫu nhiên, K8s Secret sinh khi cài chart; gitleaks quét toàn bộ lịch sử Git trong CI |
 | Vé QR (NFR-SEC-04) | Token chỉ chứa id vé và HMAC, không có dữ liệu cá nhân; check-in chỉ cho đúng ban tổ chức, mỗi vé một lần |
@@ -246,6 +247,7 @@ JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking
 | `BookingIntegrationTest.oneThousandCustomersRaceForOneSeatAndExactlyOneWins` | FR-BKG-03, NFR-TEST-03 |
 | `BookingIntegrationTest.holdsAreAllOrNothing` | FR-BKG-02 |
 | `BookingIntegrationTest.replayingAnIdempotencyKeyReturnsTheSameBooking` | FR-BKG-04 |
+| `BookingIntegrationTest.anIdempotencyKeyReusedWithAnotherBodyIsRefused` | BIZ-07: cùng key, ghế hoặc sự kiện khác thì 422, không trả booking cũ |
 | `BookingIntegrationTest.seatMapShowsLiveHolds` | FR-BKG-01 |
 | `BookingSagaIntegrationTest.paidBookingIsConfirmedAndItsSeatsSold` | FR-BKG-09 |
 | `BookingSagaIntegrationTest.expiredHoldIsCancelledAndItsPaymentStopped` | FR-BKG-05 |
@@ -266,12 +268,12 @@ JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking
 | `WaitingRoomIntegrationTest` | FR-WR-01, 02, 03: FIFO, SSE, JWT |
 | `RateLimitTest` | FR-GW-02, NFR-SEC-06 với Redis thật |
 | `RoutingTest` | FR-GW-01; NFR-SEC-01: thiếu token, token ký sai khoá đều 401 ở Gateway |
-| `KeycloakRealmTest` | FR-IAM-01 với Keycloak thật: realm, vai trò mặc định CUSTOMER, audience |
+| `KeycloakRealmTest` | FR-IAM-01 với Keycloak thật: realm, vai trò mặc định CUSTOMER, audience; AUTH-13: mật khẩu ngắn hoặc trùng email bị từ chối |
 | `ResourceServerTest` | NFR-SEC-01, 05: 401/403 dạng problem+json, vai trò kiểm trước khi validate body, OpenAPI |
 | `EventApiIntegrationTest.onlyOrganizersChangeTheCatalogue` | FR-IAM-01: customer tạo sự kiện bị 403 |
 | `BookingIntegrationTest.bookingNeedsACustomerToken` | FR-IAM-01: booking gắn với `sub` và email của token |
 | `PaymentIntegrationTest.onlyFreshCorrectlySignedWebhooksAreAccepted` | FR-PAY-04: không ký, ký sai, sửa body, gửi lại sau 6 phút đều 401 |
-| `TicketIntegrationTest.aTicketGetsInOnceAndOnlyThroughItsOrganizer` | FR-TKT-03 |
+| `TicketIntegrationTest.aTicketGetsInOnceAndOnlyThroughItsOrganizer` | FR-TKT-03; QR-06: ban tổ chức sự kiện khác nhận 403 cho cả mã thật lẫn mã giả |
 | `TicketIntegrationTest.simultaneousScansAdmitExactlyOnce` | FR-TKT-03: 20 lần quét đồng thời, đúng 1 được vào |
 | `CancellationEmailIntegrationTest` | FR-NTF-02: email ghi lý do; email hoàn tiền dù hai event đến theo thứ tự nào |
 | `ResilienceTest` | NFR-AVAIL-02: cắt ở 2 giây; breaker mở sau 20 lỗi và không gọi service nữa |
