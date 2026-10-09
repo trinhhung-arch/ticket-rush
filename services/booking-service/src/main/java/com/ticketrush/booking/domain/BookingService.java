@@ -1,6 +1,8 @@
 package com.ticketrush.booking.domain;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -99,6 +101,7 @@ public class BookingService {
             metrics.seatConflict();
             throw seatTaken(sold.code());
         });
+        refuseSeatsJustLetGo(command.userId(), event.id(), seatCodes, now);
 
         UUID bookingId = UUID.randomUUID();
         holds.holdAll(event.id(), seatCodes, bookingId, properties.redisHoldTtl()).ifPresent(taken -> {
@@ -157,6 +160,39 @@ public class BookingService {
             throw ApiException.unprocessable("At most %d tickets per customer for this event; you already have %d"
                     .formatted(limit, active)).with("limit", limit).with("current", active);
         }
+    }
+
+    /**
+     * BIZ-02. Without this, one account could keep the same seats for the whole sale by holding them
+     * again the moment its unpaid booking ends. Seats it let go (cancelled, expired or declined) stay out
+     * of its reach for the cool-down and are open to everyone else. A seat conflict is the system's doing
+     * and does not count.
+     */
+    private void refuseSeatsJustLetGo(String userId, UUID eventId, List<String> seatCodes, Instant now) {
+        jdbc.sql("""
+                        select s.seat_code, max(least(b.updated_at, b.expires_at)) as let_go_at
+                        from booking b join booking_seat s on s.booking_id = b.id
+                        where b.user_id = :userId and b.event_id = :eventId and s.seat_code in (:seatCodes)
+                          and b.status = 'CANCELLED' and b.cancel_reason <> 'SEAT_CONFLICT'
+                          and least(b.updated_at, b.expires_at) > :since
+                        group by s.seat_code
+                        order by s.seat_code
+                        limit 1
+                        """)
+                .param("userId", userId)
+                .param("eventId", eventId)
+                .param("seatCodes", seatCodes)
+                .param("since", now.minus(properties.reholdCooldown()).atOffset(ZoneOffset.UTC))
+                .query((row, i) -> ApiException.conflict(
+                                "You let seat %s go less than %d minutes ago; choose another seat or try again later"
+                                        .formatted(row.getString("seat_code"), properties.reholdCooldown().toMinutes()))
+                        .with("seatCode", row.getString("seat_code"))
+                        .with("availableToYouAt", row.getObject("let_go_at", OffsetDateTime.class).toInstant()
+                                .plus(properties.reholdCooldown())))
+                .optional()
+                .ifPresent(refusal -> {
+                    throw refusal;
+                });
     }
 
     private Optional<Result> findReplay(CreateBooking command) {

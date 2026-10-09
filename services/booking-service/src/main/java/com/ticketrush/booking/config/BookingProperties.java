@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param holdGrace    extra life of the Redis hold after that, so a payment that lands right at the
  *                     deadline does not find its seat already held by someone else
  * @param maxTicketsPerCustomer tickets one account may hold or own for one event (FR-BKG-07)
+ * @param reholdCooldown        how long seats a customer let go unpaid stay out of that customer's reach (BIZ-02)
  * @param admissionTokenKey     HMAC key shared with the waiting room; without it, waiting-room events refuse everyone
  */
 @ConfigurationProperties("ticketrush.booking")
@@ -17,6 +18,7 @@ public record BookingProperties(
         @DefaultValue("PT10M") Duration holdDuration,
         @DefaultValue("PT60S") Duration holdGrace,
         @DefaultValue("6") int maxTicketsPerCustomer,
+        @DefaultValue("PT10M") Duration reholdCooldown,
         @DefaultValue("") String admissionTokenKey) {
 
     public Duration redisHoldTtl() {
