@@ -1,0 +1,43 @@
+name: CodeQL
+
+# SAST (security plan): data flows into injection, deserialization, SSRF and the like in the Java code,
+# and script injection or over-broad permissions in these workflows. Findings go to the repository's
+# code scanning alerts; the "CodeQL" check on a pull request turns red for new High alerts once the
+# check-run threshold is set in the repository settings.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 3 * * 1'  # Mondays: picks up new queries against unchanged code
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java-kotlin, actions]
+    steps:
+      - uses: actions/checkout@v4
+      # Both languages are analysed from source, so no Maven build is needed here.
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:${{ matrix.language }}
