@@ -12,6 +12,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Security scanners (security plan): "report" turns findings above a scanner's threshold into warnings
+  # while false positives are sorted out; "enforce" fails the job. .github/scripts/gate.sh applies it.
+  SECURITY_GATE: report
+  TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.75.0
+  OSV_SCANNER_IMAGE: ghcr.io/google/osv-scanner:v2.6.0
+  KUBESCAPE_IMAGE: quay.io/kubescape/kubescape-cli:v4.0.15
+
 jobs:
   secrets:
     name: Secret scan
@@ -28,15 +36,50 @@ jobs:
   chart:
     name: Helm chart
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
       # NFR-DEP-03: the chart must lint and render; deploy/kind/up.sh installs it on a local cluster.
       - name: Lint and render
+        id: render
         run: |
           helm lint deploy/helm/ticketrush
-          helm template ticketrush deploy/helm/ticketrush > /dev/null
+          mkdir -m 777 reports
+          helm template ticketrush deploy/helm/ticketrush --namespace ticketrush > reports/chart.yaml
+      # INF-06, SC-04: misconfigurations of High and up in the chart's templates and the Dockerfile.
+      - name: Trivy config
+        run: |
+          trivy() { docker run --rm -v "$PWD:/src" -w /src "$TRIVY_IMAGE" "$@"; }
+          rc=0
+          trivy config --quiet --skip-dirs reports --severity HIGH,CRITICAL --exit-code 5 \
+            --format json --output reports/trivy-config.json . || rc=$?
+          trivy convert --quiet --format sarif --output reports/trivy-config.sarif reports/trivy-config.json
+          {
+            echo '### Trivy config'
+            echo '```'
+            trivy convert --quiet --format table reports/trivy-config.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          .github/scripts/gate.sh "Trivy config" "$rc" 5
+      - name: Upload Trivy config findings to code scanning
+        if: ${{ !cancelled() && hashFiles('reports/trivy-config.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: reports/trivy-config.sarif
+          category: trivy-config
+      # INF-06: the rendered chart against the NSA and MITRE frameworks; a failed High control is a finding.
+      - name: kubescape
+        if: ${{ !cancelled() && steps.render.outcome == 'success' }}
+        run: |
+          rc=0
+          docker run --rm -v "$PWD/reports:/reports" "$KUBESCAPE_IMAGE" scan framework nsa,mitre /reports/chart.yaml \
+            --format markdown --output /reports/kubescape.md --severity-threshold high || rc=$?
+          cat reports/kubescape.md >> "$GITHUB_STEP_SUMMARY"
+          .github/scripts/gate.sh kubescape "$rc"
 
   build:
     name: Build and test
@@ -67,6 +110,65 @@ jobs:
           name: test-reports
           path: '*/*/target/surefire-reports/'
 
+  dependencies:
+    name: Dependency scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      # SC-03: the libraries that ship, as Maven resolves them (test scope and test-support left out).
+      # osv-scanner cannot resolve the reactor's own snapshot modules from the poms alone.
+      - name: Software bill of materials
+        run: >-
+          ./mvnw -B -q org.cyclonedx:cyclonedx-maven-plugin:2.9.3:makeAggregateBom
+          -DoutputFormat=json -DoutputName=bom -DexcludeArtifactId=test-support
+      # Known vulnerabilities in them from OSV. One of High (CVSS 7) and up, or of unknown severity, is a
+      # finding unless osv-scanner.toml ignores it with a reason.
+      - name: osv-scanner
+        run: |
+          osv() {
+            docker run --rm -v "$PWD:/src:ro" -w /src "$OSV_SCANNER_IMAGE" \
+              scan source --verbosity error --config osv-scanner.toml -L target/bom.json "$@"
+          }
+          rc=0
+          osv --format json > osv.json || rc=$?
+          [ "$rc" -le 1 ] || .github/scripts/gate.sh osv-scanner "$rc"
+          high=$(jq '[.results[]?.packages[]?.groups[]? | select((.max_severity | tonumber? // 10) >= 7)] | length' osv.json)
+          {
+            echo "### osv-scanner: $high advisories of High and up"
+            osv --format markdown || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          .github/scripts/gate.sh osv-scanner "$([ "$high" -eq 0 ] && echo 0 || echo 1)"
+      - name: Upload SBOM
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: target/bom.json
+          if-no-files-found: ignore
+
+  infra-images:
+    name: Infrastructure images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # SC-04: the third-party images the chart deploys (docker-compose.yml uses the same tags). Their fix
+      # is a newer upstream tag, which Dependabot proposes.
+      - name: Trivy
+        run: |
+          rc=0
+          while read -r image; do
+            .github/scripts/scan-image.sh "$image" || rc=$?
+            [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ] || exit "$rc"
+          done < <(awk '$1 == "image:" { print $2 }' deploy/helm/ticketrush/values.yaml)
+          .github/scripts/gate.sh Trivy "$rc" 5
+
   images:
     name: Image ${{ matrix.module }}
     needs: [secrets, chart, build]
@@ -93,9 +195,18 @@ jobs:
         with:
           context: .
           build-args: MODULE=${{ matrix.module }}
+          load: true
           push: ${{ github.event_name == 'push' }}
           tags: |
             ghcr.io/${{ github.repository }}/${{ matrix.module }}:${{ github.sha }}
             ghcr.io/${{ github.repository }}/${{ matrix.module }}:latest
           cache-from: type=gha,scope=${{ matrix.module }}
           cache-to: type=gha,mode=max,scope=${{ matrix.module }}
+      # SC-04: the image's OS packages and the jars in it; a Critical CVE with a fix is a finding.
+      - name: Trivy
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.module }}:${{ github.sha }}
+        run: |
+          rc=0
+          .github/scripts/scan-image.sh "$IMAGE" || rc=$?
+          .github/scripts/gate.sh Trivy "$rc" 5
