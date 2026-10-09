@@ -38,14 +38,33 @@
         <java.version>21</java.version>
         <spring-cloud.version>2025.1.3</spring-cloud.version>
         <zxing.version>3.5.4</zxing.version>
-        <!-- Must match the OpenTelemetry SDK that Spring Boot manages (1.55.0 for Boot 4.0.x). -->
-        <opentelemetry-instrumentation.version>2.21.0-alpha</opentelemetry-instrumentation.version>
+        <!-- Must match the OpenTelemetry SDK below (2.28.0-alpha is built on 1.62.0). -->
+        <opentelemetry-instrumentation.version>2.28.0-alpha</opentelemetry-instrumentation.version>
+        <!-- The semantic conventions that instrumentation needs; micrometer-tracing-bridge-otel would pull an older one
+             that lacks OtelAttributes.OTEL_EVENT_NAME. -->
+        <opentelemetry-semconv.version>1.41.1</opentelemetry-semconv.version>
         <!-- Same version Spring Security 7.0 (oauth2-jose) uses. -->
         <nimbus-jose-jwt.version>10.4</nimbus-jose-jwt.version>
         <!-- 3.0.x is built on Boot 4.0; 3.1.x already needs Boot 4.1. -->
         <springdoc.version>3.0.3</springdoc.version>
         <archunit.version>1.5.1</archunit.version>
         <jacoco.version>0.8.15</jacoco.version>
+
+        <!--
+            SC-03: patched versions of libraries Spring Boot 4.0.8 manages, found by osv-scanner. Each one
+            can go once the Spring Boot in use manages that version or newer (4.1.1 still does not for
+            Tomcat and Jackson).
+        -->
+        <!-- GHSA-9xv2-5v5q-p794, GHSA-gcx9-497g-6cp6, GHSA-h3x4-894j-xpx5: fixed in 11.0.25. -->
+        <tomcat.version>11.0.26</tomcat.version>
+        <!-- GHSA-7hhh-6rmp-j9qf, GHSA-p6pp-m3f8-5c89, GHSA-cxp5-3px4-pw24, GHSA-q4xh-88c3-wmh7,
+             GHSA-wv8q-qhhj-9h54 and two Medium ones: fixed in 3.1.7 and 2.21.7. -->
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <!-- GHSA-rcgg-9c38-7xpx (unbounded W3C baggage): fixed in 1.62.0, the version Boot 4.1 manages. -->
+        <opentelemetry.version>1.62.0</opentelemetry.version>
+        <!-- Kafka's compression codec; GHSA-mcr4-qmvw-px4g and five more: fixed in 1.11.4. -->
+        <lz4-java.version>1.11.4</lz4-java.version>
     </properties>
 
     <dependencyManagement>
@@ -88,9 +107,19 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4-java.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.opentelemetry.instrumentation</groupId>
                 <artifactId>opentelemetry-logback-appender-1.0</artifactId>
                 <version>${opentelemetry-instrumentation.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.opentelemetry.semconv</groupId>
+                <artifactId>opentelemetry-semconv</artifactId>
+                <version>${opentelemetry-semconv.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.nimbusds</groupId>
