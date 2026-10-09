@@ -61,6 +61,8 @@ ticketrush:
   booking:
     hold-duration: PT10M
     hold-grace: PT60S
+    # BIZ-02: seats let go unpaid cannot be held again by the same customer this soon; others can take them.
+    rehold-cooldown: PT10M
     expiry-sweep-interval-ms: 5000
     admission-token-key: ${ADMISSION_TOKEN_KEY:}
   outbox:

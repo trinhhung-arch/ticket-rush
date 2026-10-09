@@ -2,7 +2,9 @@ package com.ticketrush.waitingroom.web;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -26,6 +28,8 @@ class WaitingRoomController {
 
     private final WaitingRoom room;
     private final ExecutorService streams = Executors.newVirtualThreadPerTaskExecutor();
+    /** RES-08: the one live stream per buyer and event on this instance. */
+    private final Map<String, SseEmitter> openStreams = new ConcurrentHashMap<>();
 
     WaitingRoomController(WaitingRoom room) {
         this.room = room;
@@ -42,14 +46,24 @@ class WaitingRoomController {
         return room.status(eventId, caller.id());
     }
 
-    /** FR-WR-02: server-sent events with the position every 2 s, ending with the admission token. */
+    /**
+     * FR-WR-02: server-sent events with the position every 2 s, ending with the admission token.
+     *
+     * <p>RES-08: every stream holds a thread and polls Redis, so a buyer gets one per event. A newer stream
+     * (a reloaded tab) ends the older one rather than adding to it; the gateway limits how fast they open.
+     */
     @GetMapping("/stream")
     SseEmitter stream(Caller caller, @PathVariable UUID eventId) {
         String userId = caller.id();
+        String key = eventId + "/" + userId;
         SseEmitter emitter = new SseEmitter(Duration.ofMinutes(30).toMillis());
+        SseEmitter older = openStreams.put(key, emitter);
+        if (older != null) {
+            older.complete();
+        }
         streams.submit(() -> {
             try {
-                while (true) {
+                while (openStreams.get(key) == emitter) {
                     QueueStatus status = room.status(eventId, userId);
                     emitter.send(SseEmitter.event().name("status").data(status));
                     if (status.state() != QueueStatus.State.QUEUED) {
@@ -59,10 +73,12 @@ class WaitingRoomController {
                     Thread.sleep(PUSH_EVERY);
                 }
             } catch (IOException | IllegalStateException e) {
-                // The browser went away; nothing left to push to.
+                // The browser went away, or a newer stream replaced this one; nothing left to push to.
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 emitter.complete();
+            } finally {
+                openStreams.remove(key, emitter);
             }
         });
         return emitter;

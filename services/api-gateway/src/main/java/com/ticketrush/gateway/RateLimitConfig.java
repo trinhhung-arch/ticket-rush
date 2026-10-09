@@ -9,6 +9,7 @@ import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import reactor.core.publisher.Mono;
 
 /**
@@ -18,10 +19,19 @@ import reactor.core.publisher.Mono;
 @Configuration(proxyBeanMethods = false)
 class RateLimitConfig {
 
+    /** Primary only because the gateway's filter factory wants one default limiter; every route names its own. */
     @Bean
+    @Primary
     RedisRateLimiter bookingRateLimiter(@Value("${ticketrush.rate-limit.bookings-per-second}") int perSecond) {
         // replenish = burst: at most `perSecond` requests in any one-second window, no saving up.
         return new RedisRateLimiter(perSecond, perSecond, 1);
+    }
+
+    /** RES-08: each queue stream holds a thread in the waiting room for up to 30 minutes. */
+    @Bean
+    RedisRateLimiter queueStreamRateLimiter(@Value("${ticketrush.rate-limit.queue-streams-per-second}") int perSecond,
+                                            @Value("${ticketrush.rate-limit.queue-stream-burst}") int burst) {
+        return new RedisRateLimiter(perSecond, burst, 1);
     }
 
     @Bean

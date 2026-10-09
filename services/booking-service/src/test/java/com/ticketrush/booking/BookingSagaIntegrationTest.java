@@ -219,6 +219,39 @@ class BookingSagaIntegrationTest extends BookingTestSupport {
                 .hasStatus(HttpStatus.CONFLICT);
     }
 
+    /**
+     * BIZ-02: seats a customer let go unpaid (cancelled, expired or declined) stay out of that customer's
+     * reach for a while, so one account cannot keep the same seats for the whole sale; anyone else may take them.
+     */
+    @Test
+    void seatsLetGoUnpaidAreNotHeldAgainBySameCustomerAtOnce() {
+        UUID eventId = publishEventOnSale();
+        UUID cancelled = bookingService.create(booking("hoa", eventId, "GA-B-01", "GA-B-02")).booking().id();
+        assertThat(mvc.post().uri("/api/bookings/{id}/cancel", cancelled).with(customer("hoa"))).hasStatusOk();
+        UUID expired = bookingService.create(booking("hoa", eventId, "GA-B-03")).booking().id();
+        makeOverdue(expired);
+        saga.expireOverdue(100);
+        UUID declined = bookingService.create(booking("hoa", eventId, "GA-B-04")).booking().id();
+        UUID paymentId = UUID.randomUUID();
+        paymentCreated(declined, paymentId);
+        send(Topics.PAYMENT_EVENTS, declined, UUID.randomUUID(),
+                new PaymentFailed(PaymentEvents.CURRENT_VERSION, paymentId, declined, "DECLINED"));
+        await().atMost(WAIT).until(() -> statusOf(expired) == BookingStatus.CANCELLED
+                && statusOf(declined) == BookingStatus.CANCELLED);
+
+        for (String seat : List.of("GA-B-02", "GA-B-03", "GA-B-04")) {
+            assertThatThrownBy(() -> bookingService.create(booking("hoa", eventId, seat))).as(seat)
+                    .isInstanceOfSatisfying(ApiException.class, e -> {
+                        assertThat(e.status()).isEqualTo(HttpStatus.CONFLICT);
+                        assertThat(e.properties()).containsEntry("seatCode", seat).containsKey("availableToYouAt");
+                    });
+        }
+        assertThat(bookingService.create(booking("hoa", eventId, "GA-B-05")).created()).as("other seats").isTrue();
+        await().atMost(WAIT).untilAsserted(() -> assertThat(
+                bookingService.create(booking("khoa", eventId, "GA-B-02", "GA-B-03", "GA-B-04")).created())
+                .as("other customers").isTrue());
+    }
+
     @Test
     void customersSeeTheirOwnBookingsNewestFirst() {
         UUID eventId = publishEventOnSale();

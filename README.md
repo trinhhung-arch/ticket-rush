@@ -206,7 +206,7 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 | GET | `/api/events?city=&from=&to=&page=&size=` | công khai | FR-EVT-03: tối đa 50 mục một trang |
 | GET | `/api/events/{id}` | công khai | FR-EVT-04; bản nháp chỉ chủ sự kiện thấy |
 | GET | `/api/events/{id}/seats` | công khai | FR-BKG-01: sơ đồ ghế AVAILABLE / HELD / SOLD |
-| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | CUSTOMER | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; vé gửi tới email của tài khoản; rate limit 10 req/s mỗi người (FR-GW-02) |
+| POST | `/api/bookings` (header `Idempotency-Key`, `X-Admission-Token` nếu sự kiện có waiting room) | CUSTOMER | FR-BKG-02, 03, 04, 07: giữ 1–6 ghế trong 10 phút, tối đa 6 vé mỗi người mỗi sự kiện; vé gửi tới email của tài khoản; rate limit 10 req/s mỗi người (FR-GW-02). Ghế vừa nhả mà chưa trả tiền (huỷ, hết hạn, thanh toán bị từ chối) thì chính người đó phải chờ 10 phút mới giữ lại được (409 kèm `availableToYouAt`), người khác giữ được ngay |
 | POST | `/api/bookings/{id}/cancel` | CUSTOMER, chủ booking | FR-BKG-06: khách tự huỷ booking chưa thanh toán |
 | GET | `/api/bookings` | CUSTOMER | FR-BKG-08: booking của tôi, mới nhất trước, kèm lý do huỷ |
 | GET | `/api/bookings/{id}` | CUSTOMER, chủ booking | Trạng thái và `checkoutUrl` |
@@ -216,7 +216,7 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 | GET | `/api/tickets?bookingId=` | CUSTOMER | FR-TKT-02: vé của tôi, `qrToken` để app vẽ mã QR |
 | POST | `/api/tickets/check-in` body `{"eventId", "qrToken"}` | ORGANIZER của sự kiện, ADMIN | FR-TKT-03: 200 ADMITTED lần đầu; 409 ALREADY_USED kèm giờ check-in lần đầu |
 | POST | `/api/queue/events/{id}/join` | CUSTOMER | FR-WR-01: vào ngay nếu còn chỗ, không thì nhận vị trí; khi vào được thì có `admissionToken` |
-| GET | `/api/queue/events/{id}/status`, `/stream` (SSE) | CUSTOMER | FR-WR-02: vị trí và thời gian chờ ước tính, đẩy mỗi 2 giây |
+| GET | `/api/queue/events/{id}/status`, `/stream` (SSE) | CUSTOMER | FR-WR-02: vị trí và thời gian chờ ước tính, đẩy mỗi 2 giây. Mỗi người mỗi sự kiện một luồng: mở luồng mới (tải lại tab) thì luồng cũ đóng; mở luồng được dồn 3 lần, sau đó 1 lần/giây |
 
 ## Bảo mật và độ bền
 
@@ -227,6 +227,7 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 | Không lộ bí mật (NFR-SEC-03) | `.env` sinh ngẫu nhiên, K8s Secret sinh khi cài chart; gitleaks quét toàn bộ lịch sử Git trong CI |
 | Vé QR (NFR-SEC-04) | Token chỉ chứa id vé và HMAC, không có dữ liệu cá nhân; check-in chỉ cho đúng ban tổ chức, mỗi vé một lần |
 | Lời gọi đồng bộ (NFR-AVAIL-02) | Resilience4j ở Gateway: timeout 2 giây, mỗi service một circuit breaker, mở khi ≥ 50% lỗi trong 20 lời gọi; trả 503/504 dạng problem+json |
+| Chống lạm dụng (BIZ-02, RES-08) | Một tài khoản không giữ được mãi cùng một số ghế: ghế nhả mà chưa trả tiền bị khoá với chính người đó 10 phút (`ticketrush.booking.rehold-cooldown`). Luồng SSE của phòng chờ mỗi người mỗi sự kiện chỉ một luồng, và Gateway giới hạn tốc độ mở luồng |
 | Tắt êm (NFR-AVAIL-06) | Graceful shutdown 30 giây; trên Kubernetes thêm `preStop` 5 giây và `terminationGracePeriodSeconds` 40 |
 
 ## Test
@@ -263,8 +264,9 @@ JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking
 | `BookingIntegrationTest.parallelRequestsFromOneCustomerCannotExceedTheLimit` | FR-BKG-07: 5 request song song, đúng 3 qua (6 vé) |
 | `BookingIntegrationTest.waitingRoomEventsRequireAnAdmissionTokenForThatBuyerAndEvent` | FR-WR-03: token sai người, sai sự kiện, hết hạn, sai khoá đều bị 403 |
 | `BookingSagaIntegrationTest.customerCanCancelAnUnpaidBookingButNotAPaidOne` | FR-BKG-06 |
-| `WaitingRoomIntegrationTest` | FR-WR-01, 02, 03: FIFO, SSE, JWT |
-| `RateLimitTest` | FR-GW-02, NFR-SEC-06 với Redis thật |
+| `BookingSagaIntegrationTest.seatsLetGoUnpaidAreNotHeldAgainBySameCustomerAtOnce` | BIZ-02: huỷ, hết hạn, bị từ chối đều khoá ghế với chính người đó; người khác giữ được ngay |
+| `WaitingRoomIntegrationTest` | FR-WR-01, 02, 03: FIFO, SSE, JWT; RES-08: luồng mới đóng luồng cũ của cùng người |
+| `RateLimitTest` | FR-GW-02, NFR-SEC-06 với Redis thật; RES-08: mở luồng phòng chờ bị cắt sau 3 lần dồn |
 | `RoutingTest` | FR-GW-01; NFR-SEC-01: thiếu token, token ký sai khoá đều 401 ở Gateway |
 | `KeycloakRealmTest` | FR-IAM-01 với Keycloak thật: realm, vai trò mặc định CUSTOMER, audience |
 | `ResourceServerTest` | NFR-SEC-01, 05: 401/403 dạng problem+json, vai trò kiểm trước khi validate body, OpenAPI |
