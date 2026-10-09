@@ -8,6 +8,7 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": false,
   "bruteForceProtected": true,
+  "passwordPolicy": "length(15) and maxLength(128) and notUsername and notEmail",
   "accessTokenLifespan": 900,
   "roles": {
     "realm": [

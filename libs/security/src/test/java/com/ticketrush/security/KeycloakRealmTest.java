@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -25,18 +26,22 @@ import org.testcontainers.utility.MountableFile;
 
 /**
  * Checks the realm file in infra/keycloak against a real Keycloak: the accounts, the default
- * CUSTOMER role, the flat roles claim and the ticketrush-api audience the services rely on.
+ * CUSTOMER role, the flat roles claim and the ticketrush-api audience the services rely on, and the
+ * password policy that self-registration goes through.
  */
 @Testcontainers
 class KeycloakRealmTest {
 
     private static final String PASSWORD = "realm-test-password";
+    private static final String ADMIN_PASSWORD = UUID.randomUUID().toString();
 
     @Container
     static final GenericContainer<?> keycloak = new GenericContainer<>("quay.io/keycloak/keycloak:26.7.4")
             .withCommand("start-dev", "--import-realm")
             .withEnv("KC_HEALTH_ENABLED", "true")
             .withEnv("DEMO_USER_PASSWORD", PASSWORD)
+            .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
+            .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", ADMIN_PASSWORD)
             .withCopyFileToContainer(MountableFile.forHostPath("../../infra/keycloak/ticketrush-realm.json"),
                     "/opt/keycloak/data/import/ticketrush-realm.json")
             .withExposedPorts(8080, 9000)
@@ -75,6 +80,17 @@ class KeycloakRealmTest {
         assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
     }
 
+    /** AUTH-13: anyone may sign up, so the realm itself turns weak passwords away. */
+    @Test
+    void weakPasswordsAreTurnedAway() {
+        String email = "newcomer@ticketrush.dev";
+        String user = createUser(email);
+
+        assertThat(setPassword(user, "a".repeat(14))).as("shorter than 15").isEqualTo(400);
+        assertThat(setPassword(user, email)).as("the email itself").isEqualTo(400);
+        assertThat(setPassword(user, UUID.randomUUID().toString())).isEqualTo(204);
+    }
+
     private static List<String> roles(Jwt jwt) {
         return ResourceServerConfig.authenticationConverter().convert(jwt).getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority).toList();
@@ -94,5 +110,43 @@ class KeycloakRealmTest {
                 .retrieve()
                 .body(Map.class);
         return (String) response.get("access_token");
+    }
+
+    private static String createUser(String email) {
+        URI location = admin().post().uri("/users")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("username", email, "email", email, "enabled", true))
+                .retrieve()
+                .toBodilessEntity()
+                .getHeaders().getLocation();
+        return location.getPath().substring(location.getPath().lastIndexOf('/') + 1);
+    }
+
+    /** The status Keycloak answers when an admin sets this password, as the policy applies to admins too. */
+    private static int setPassword(String userId, String password) {
+        return admin().put().uri("/users/{id}/reset-password", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("type", "password", "value", password, "temporary", false))
+                .exchange((request, response) -> response.getStatusCode().value());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static RestClient admin() {
+        String base = "http://" + keycloak.getHost() + ":" + keycloak.getMappedPort(8080);
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "password");
+        form.add("client_id", "admin-cli");
+        form.add("username", "admin");
+        form.add("password", ADMIN_PASSWORD);
+        Map<String, Object> response = RestClient.create().post()
+                .uri(base + "/realms/master/protocol/openid-connect/token")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(form)
+                .retrieve()
+                .body(Map.class);
+        return RestClient.builder()
+                .baseUrl(base + "/admin/realms/ticketrush")
+                .defaultHeader("Authorization", "Bearer " + response.get("access_token"))
+                .build();
     }
 }

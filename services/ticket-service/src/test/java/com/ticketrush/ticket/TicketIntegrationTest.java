@@ -126,6 +126,8 @@ class TicketIntegrationTest {
         assertThat(scan(organizer("oscar"), eventId, qr.get(0))).as("another event's organizer")
                 .hasStatus(HttpStatus.FORBIDDEN);
         String forged = qr.get(0).substring(0, qr.get(0).lastIndexOf('.') + 1) + "AAAA";
+        assertThat(scan(organizer("oscar"), eventId, forged)).as("QR-06: a forged code gets the same answer")
+                .hasStatus(HttpStatus.FORBIDDEN);
         assertThat(scan(organizer("olivia"), eventId, forged)).as("forged QR")
                 .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT).bodyJson().extractingPath("$.result").isEqualTo("INVALID");
         assertThat(scan(organizer("olivia"), UUID.randomUUID(), qr.get(0))).as("olivia does not run that event")
