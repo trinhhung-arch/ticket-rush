@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import com.nimbusds.jose.crypto.MACVerifier;
@@ -104,5 +105,32 @@ class WaitingRoomIntegrationTest {
 
         assertThat(data.getFirst()).contains("\"state\":\"QUEUED\"", "\"position\":1");
         assertThat(data.getLast()).contains("\"state\":\"ADMITTED\"", "\"admissionToken\":\"ey");
+    }
+
+    /**
+     * RES-08: each open stream holds a thread and polls Redis, so a buyer gets one per event. A newer
+     * stream (a reloaded tab) ends the older one instead of adding to it.
+     */
+    @Test
+    void aNewStreamEndsTheBuyersOlderOne() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        for (String buyer : List.of("an", "binh", "chau", "lan")) {
+            room.join(eventId, buyer);
+        }
+        HttpClient http = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + port + "/api/queue/events/" + eventId + "/stream"))
+                .header("Authorization", TestJwts.bearer(TestJwts.loadTestToken(TestJwts.LOAD_TEST_SECRET, "lan",
+                        Roles.CUSTOMER)))
+                .timeout(Duration.ofSeconds(20)).build();
+
+        HttpResponse<Stream<String>> older = http.send(request, HttpResponse.BodyHandlers.ofLines());
+        HttpResponse<Stream<String>> newer = http.sendAsync(request, HttpResponse.BodyHandlers.ofLines())
+                .get(5, TimeUnit.SECONDS);
+
+        List<String> olderData = older.body().filter(line -> line.startsWith("data:")).toList();
+        List<String> newerData = newer.body().filter(line -> line.startsWith("data:")).toList();
+        assertThat(olderData.getLast()).as("the older stream ends while still queued").contains("\"state\":\"QUEUED\"");
+        assertThat(newerData.getLast()).contains("\"state\":\"ADMITTED\"");
     }
 }

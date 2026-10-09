@@ -59,6 +59,9 @@ ticketrush:
   rate-limit:
     # FR-GW-02: 10 booking requests per second per user; the 11th within a second gets 429.
     bookings-per-second: ${BOOKING_RATE_LIMIT:10}
+    # RES-08: opening a queue stream, per user: a burst of 3 (a few reloads), then one a second.
+    queue-streams-per-second: 1
+    queue-stream-burst: 3
 
 # One Swagger UI for all services at /swagger-ui.html; "Authorize" signs in through Keycloak with PKCE.
 springdoc:

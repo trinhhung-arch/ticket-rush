@@ -3,6 +3,7 @@ package com.ticketrush.gateway;
 import java.net.URI;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.cloud.gateway.route.Route;
@@ -26,7 +27,9 @@ class RoutesConfig {
     private static final Set<String> FAILURE_STATUSES = Set.of("500", "502", "503", "504");
 
     @Bean
-    RouteLocator routes(RouteLocatorBuilder builder, ServiceUris uris, RedisRateLimiter bookingRateLimiter,
+    RouteLocator routes(RouteLocatorBuilder builder, ServiceUris uris,
+                        @Qualifier("bookingRateLimiter") RedisRateLimiter bookingRateLimiter,
+                        @Qualifier("queueStreamRateLimiter") RedisRateLimiter queueStreamRateLimiter,
                         KeyResolver callerKeyResolver) {
         return builder.routes()
                 // The live seat map belongs to booking-service even though it reads as part of an event.
@@ -46,8 +49,13 @@ class RoutesConfig {
                         .filters(f -> breaker(f, "payment-service")).uri(uris.paymentService()))
                 .route("tickets", r -> r.path("/api/tickets", "/api/tickets/**")
                         .filters(f -> breaker(f, "ticket-service")).uri(uris.ticketService()))
-                // The position stream stays open for minutes by design, so it has no time limit.
-                .route("queue-stream", r -> r.order(-1).path("/api/queue/events/*/stream").uri(uris.waitingRoomService()))
+                // The position stream stays open for minutes by design, so it has no time limit; how often a
+                // user may open one is limited instead (RES-08).
+                .route("queue-stream", r -> r.order(-1).path("/api/queue/events/*/stream")
+                        .filters(f -> f.requestRateLimiter(limit -> limit
+                                .setRateLimiter(queueStreamRateLimiter)
+                                .setKeyResolver(callerKeyResolver)))
+                        .uri(uris.waitingRoomService()))
                 .route("queue", r -> r.path("/api/queue", "/api/queue/**")
                         .filters(f -> breaker(f, "waiting-room-service")).uri(uris.waitingRoomService()))
                 // Each service's OpenAPI description, for the Swagger UI served by the gateway (NFR-MAINT-02).

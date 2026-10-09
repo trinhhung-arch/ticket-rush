@@ -78,6 +78,22 @@ class RateLimitTest {
         }
     }
 
+    /** RES-08: opening queue streams is limited too, as each one holds a thread in the waiting room. */
+    @Test
+    void openingQueueStreamsIsCutAfterABurstOfThree() {
+        String user = "user-" + UUID.randomUUID();
+        URI stream = URI.create("http://localhost:" + port + "/api/queue/events/" + UUID.randomUUID() + "/stream");
+
+        Map<Integer, Long> statuses = IntStream.range(0, 10)
+                .mapToObj(i -> http.sendAsync(HttpRequest.newBuilder(stream).header("Authorization", Tokens.bearer(user))
+                        .build(), HttpResponse.BodyHandlers.discarding()).thenApply(HttpResponse::statusCode))
+                .toList().stream().map(CompletableFuture::join)
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+
+        assertThat(statuses.getOrDefault(201, 0L)).as("allowed").isBetween(3L, 4L);
+        assertThat(statuses.getOrDefault(429, 0L)).as("rejected").isGreaterThanOrEqualTo(6L);
+    }
+
     /** Fires {@code count} POST /api/bookings at once and counts the status codes. */
     private Map<Integer, Long> burst(int count, String userId) {
         List<CompletableFuture<Integer>> responses = IntStream.range(0, count).mapToObj(i -> {
