@@ -75,8 +75,13 @@ jobs:
       - name: kubescape
         if: ${{ !cancelled() && steps.render.outcome == 'success' }}
         run: |
+          kubescape() { docker run --rm -v "$PWD/reports:/reports" "$KUBESCAPE_IMAGE" "$@"; }
+          # C-0012 looks for credentials by environment variable name, and JWT_ISSUER and JWT_JWK_SET_URI hold
+          # Keycloak's public URLs. Only those two names are allowed; every other default input stays as shipped.
+          kubescape download controls-inputs --output /reports/controls-inputs.json
+          jq '.sensitiveKeyNamesAllowed += ["JWT_ISSUER", "JWT_JWK_SET_URI"]' reports/controls-inputs.json > reports/controls.json
           rc=0
-          docker run --rm -v "$PWD/reports:/reports" "$KUBESCAPE_IMAGE" scan framework nsa,mitre /reports/chart.yaml \
+          kubescape scan framework nsa,mitre /reports/chart.yaml --controls-config /reports/controls.json \
             --format markdown --output /reports/kubescape.md --severity-threshold high || rc=$?
           cat reports/kubescape.md >> "$GITHUB_STEP_SUMMARY"
           .github/scripts/gate.sh kubescape "$rc"
