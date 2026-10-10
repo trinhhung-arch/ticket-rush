@@ -9,7 +9,7 @@ Thực hiện từ 01/10 đến 10/10/2026 theo kế hoạch kiểm thử bảo 
 - **Mức độ:** điểm CVSS 3.1 base, tính cho một bản triển khai thật (Helm chart), tức là mạng nội bộ của cụm là `AV:A`. Hai lỗi lệch so với ước tính trong kế hoạch:
   - **#1:** kế hoạch ước Critical, CVSS cho 7,4. Lỗi chỉ phá tính toàn vẹn, và kẻ tấn công phải vào được mạng của Kafka trước. Đây vẫn là lỗi nặng nhất về hậu quả (vé miễn phí) và được sửa đầu tiên.
   - **#12:** kế hoạch ước Low, CVSS cho 5,3 (Medium), vì không cần đăng nhập mà lộ được số liệu vận hành.
-- **"Chờ merge":** bản sửa nằm trong pull request đang mở (#15 đến #19), đã qua CI và chưa vào `main`.
+- **"Chờ merge":** bản sửa nằm trong pull request đang mở (#15 đến #21), chưa vào `main`.
 
 ## Tóm tắt
 
@@ -17,7 +17,7 @@ Thực hiện từ 01/10 đến 10/10/2026 theo kế hoạch kiểm thử bảo 
 - **Đã sửa:** 14 nghi vấn; 9 đã vào `main`, 5 đang chờ merge.
 - **Sửa một phần:** #11 (bảo vệ nhánh `main` phải do chủ repo bật).
 - **Chấp nhận rủi ro:** 1 (#13).
-- **Còn mở:** các CVE trong image hạ tầng.
+- **Image hạ tầng:** CVE Critical đã được xử lý bằng cách nâng image, chờ merge #21. Riêng CVE trong `gosu` của Postgres được bỏ qua có lý do.
 
 | # | Lỗi | Ca kiểm thử | CVSS 3.1 | Trạng thái | Sửa ở |
 |---|---|---|---|---|---|
@@ -39,7 +39,8 @@ Thực hiện từ 01/10 đến 10/10/2026 theo kế hoạch kiểm thử bảo 
 | 16 | Kafka UI và Mailpit dùng tag `latest` | CFG-12 | 3,1 Low | Đã sửa | `92694ae` |
 | — | Thư viện có CVE: Tomcat, Jackson, OpenTelemetry, lz4-java | SC-03 | tới 9,8 Critical | Đã sửa, chờ merge | #18 `a6deb93` |
 | — | Pod không có CPU/memory limit; hạ tầng có root filesystem ghi được | INF-06 | 3,7 Low | Đã sửa, chờ merge | #19 `bfdf6c3` |
-| — | CVE trong image hạ tầng (Kafka, Keycloak, Postgres) | SC-04 | tới Critical | **Mở** | xem [Image hạ tầng](#image-hạ-tầng) |
+| — | CVE trong image hạ tầng (Kafka, Keycloak, Postgres) | SC-04 | tới Critical | Đã sửa, chờ merge | #21 `486d319` |
+| — | Consumer Kafka dừng hẳn khi gặp lỗi phân quyền lúc ACL chưa có | Độ bền (phát hiện khi nâng Kafka) | — | Đã sửa, chờ merge | #21 `3b5d25d` |
 
 ## Chi tiết
 
@@ -273,17 +274,42 @@ osv-scanner quét SBOM CycloneDX gồm 263 thư viện đi vào bản build. L�
   - kubescape chỉ cho phép đúng hai tên biến `JWT_*`. Đã kiểm bằng một biến mật khẩu giả để chắc control vẫn bắt được mật khẩu thật.
 - **Sau #19:** cả hai công cụ không còn phát hiện nào. Trên kind, smoke test qua và diễn tập pod lỗi 0/10.002 request.
 
-### Image hạ tầng
+### Image hạ tầng (đã sửa trong #21)
 
-Trivy quét ngày 09/10/2026. Đây là những CVE Critical đã có bản vá, nằm trong image upstream mà chart và compose dùng:
+Lần quét đầu (09/10/2026), Trivy tìm thấy CVE Critical đã có bản vá trong ba image upstream:
+- **Kafka 4.1.0:** `kafka-clients`, OpenSSL, GnuTLS.
+- **Keycloak 26.7.4:** Netty, FreeMarker, Bouncy Castle.
+- **Postgres 17-alpine:** thư viện chuẩn Go trong `gosu`.
 
-| Image | CVE Critical đã có bản vá | Hướng xử lý |
-|---|---|---|
-| `apache/kafka:4.1.0` | CVE-2026-33557 (`kafka-clients` 4.1.0 → 4.1.2); CVE-2026-31789 (OpenSSL); CVE-2026-33845, CVE-2026-42010 (GnuTLS) | Nâng lên bản Kafka 4.1.x hoặc 4.2.x mới nhất |
-| `quay.io/keycloak/keycloak:26.7.4` | CVE-2026-75595 (Netty), CVE-2026-84939 (FreeMarker), CVE-2026-8763 (Bouncy Castle) | Nâng lên 26.8.0 (Dependabot #8) |
-| `postgres:17-alpine` | CVE-2025-68121 (thư viện chuẩn Go trong `gosu`) | Tag này trôi theo bản build mới nhất; kéo lại image và quét lại |
+| Image | Trước | Sau | CVE Critical có bản vá |
+|---|---|---|---|
+| Kafka | 4.1.0 | 4.2.2 | 6 → 0. Bản 4.1.2 vẫn còn 5, nên phải lên dòng 4.2 |
+| Keycloak | 26.7.4 | 26.7.5 | 4 → 0 |
+| Postgres | `17-alpine` (tag trôi) | `17.11-alpine3.24` | 1 → 0, nhờ bỏ qua có lý do (xem dưới) |
+| Redis | `8-alpine` (tag trôi) | `8.8.3-alpine` | 0 → 0 |
 
-Image của 7 service: phần hệ điều hành (Ubuntu 26.04) và các jar không có lỗ hổng High hay Critical sau #18. Chỉ còn một lỗ hổng High trong thư viện chuẩn Go của `/usr/bin/pebble` thuộc base image temurin; lỗ hổng này hết khi Dependabot nâng base image.
+- **Ghim tag:** Postgres và Redis giờ được ghim bản cụ thể. Bản build mới của upstream không còn lặng lẽ thay image, và Dependabot đề xuất từng lần nâng.
+- **CVE-2025-68121 trong `gosu` của Postgres:** mọi image Postgres chính thức (17 và 18, Alpine và Debian) đều mang `gosu` build bằng Go 1.24.6. Lỗi nằm ở `crypto/tls`, nhưng `gosu` chỉ đổi user lúc khởi động và không mở kết nối TLS nào. Trên Kubernetes, pod chạy uid 70 nên `gosu` còn không được gọi. `.trivyignore.yaml` bỏ qua CVE này cho riêng đường dẫn `usr/local/bin/gosu`, kèm lý do và ngày hết hạn.
+- **Kiểm chứng:**
+  - Job quét image hạ tầng chạy ở chế độ `enforce` thì qua.
+  - Trên compose, smoke test qua và `check-kafka-acls.sh` qua 7/7.
+  - Trên kind, Kafka 4.2.2 khởi động được trên dữ liệu (PVC) của bản 4.1.0, và smoke test qua.
+
+**Image của 7 service:** phần hệ điều hành (Ubuntu 26.04) và các jar không có lỗ hổng High hay Critical sau #18. Chỉ còn một lỗ hổng High trong thư viện chuẩn Go của `/usr/bin/pebble` thuộc base image temurin; lỗ hổng này hết khi Dependabot nâng base image.
+
+### Phát hiện thêm: consumer Kafka dừng hẳn sau lỗi phân quyền (đã sửa trong #21)
+
+- **Mức độ:** lỗi độ bền, không phải lỗ hổng, nên không tính CVSS.
+- **Thành phần:** mọi service đọc Kafka.
+- **Tái hiện:** tạo lại Kafka trong compose (Kafka không có volume) khi các service đang chạy.
+- **Thực tế:**
+  - ACL chỉ có lại sau khi `kafka-init` chạy xong. Consumer nào poll trong khoảng đó nhận `GroupAuthorizationException`, và Spring Kafka dừng container vĩnh viễn.
+  - 7 consumer dừng như vậy. Service vẫn chạy và báo khoẻ nhưng không bao giờ đọc Kafka nữa, nên smoke test kẹt ở bước 3 cho tới khi restart service.
+  - Lần cài Helm đầu tiên cũng gặp đúng khoảng trống này, cho tới khi Job `kafka-init` chạy xong.
+- **Cách sửa (#21, `3b5d25d`):**
+  - Thêm `spring.kafka.listener.auth-exception-retry-interval: 10s` vào cấu hình Kafka dùng chung.
+  - Kiểm lại với cùng kịch bản: không consumer nào dừng, và smoke test qua mà không cần restart.
+  - Chưa có test tự động, vì broker của Testcontainers không bật ACL.
 
 ## Rủi ro được chấp nhận
 
@@ -293,12 +319,13 @@ Image của 7 service: phần hệ điều hành (Ubuntu 26.04) và các jar kh�
 | QR-06 còn lại: 409 `WRONG_EVENT` cho mã thật của sự kiện khác | Nhân viên soát vé cần thông báo này; ORGANIZER do admin cấp | Khi có vai trò soát vé riêng |
 | Kafka dùng `SASL_PLAINTEXT`, chưa có TLS | Compose và kind là môi trường local; SASL và ACL đã chặn đọc, ghi trái phép | Trước khi lên môi trường thật: `SASL_SSL` ([ADR 0009](adr/0009-infrastructure-hardening.md)) |
 | BIZ-02 với nhiều tài khoản | Mỗi tài khoản phải có email đã xác minh; có rate limit | Nếu thấy dấu hiệu bot giữ ghế |
+| CVE-2025-68121 trong `gosu` của image Postgres | `gosu` không dùng TLS; trên Kubernetes nó không chạy | Khi image Postgres chính thức build lại `gosu`, hoặc tới ngày hết hạn 10/01/2027 trong `.trivyignore.yaml` |
 
 ## Việc chưa làm
 
 - **SC-01:** bảo vệ nhánh `main` và bật Dependabot alerts/security updates (chủ repo bật trong Settings).
 - **SC-02:** ghim mọi `uses:` trong workflow theo SHA. Hiện mới ghim `github/codeql-action`; các action còn lại để sau PR Dependabot #13.
-- **SC-04:** nâng image hạ tầng (bảng trên), rồi đổi `SECURITY_GATE` sang `enforce`.
+- **Bật `enforce`:** khi #17–#21 đã được merge, đổi `SECURITY_GATE` sang `enforce` để các công cụ quét chặn PR.
 - **DAST:** OWASP ZAP chạy mỗi đêm chưa có.
 - **Phân quyền và xác thực:**
   - Ma trận phân quyền tự động (`scripts/authz-matrix.sh`) chưa có.
@@ -310,7 +337,7 @@ Image của 7 service: phần hệ điều hành (Ubuntu 26.04) và các jar kh�
 
 | Tiêu chí | Kết quả |
 |---|---|
-| Không còn lỗi Critical hoặc High nào đang mở | Code và cấu hình của dự án: **đạt** khi #15–#19 được merge. Image hạ tầng: **chưa đạt** (Kafka, Keycloak, Postgres) |
+| Không còn lỗi Critical hoặc High nào đang mở | **Đạt** khi #15–#21 được merge. Ngoại lệ duy nhất là CVE trong `gosu` của Postgres, được chấp nhận có lý do |
 | Mỗi lỗi Medium đã sửa, hoặc chấp nhận rủi ro có ghi lý do | **Đạt**, trừ SC-01 đang chờ chủ repo bật |
 | Mỗi lỗi sửa có test tự động chạy trong CI | Phần lớn **đạt**. Ngoại lệ: #2, #9, #10 kiểm bằng tay trên compose và kind; #12 chưa có test tự động; #3 có `scripts/check-kafka-acls.sh` nhưng script này không chạy trong CI |
 | CI có CodeQL, osv-scanner, Trivy và kubescape; ZAP chạy mỗi đêm không còn cảnh báo High | 4 công cụ quét: **có** (#17, chế độ báo cáo). ZAP: **chưa** |
