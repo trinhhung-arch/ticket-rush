@@ -10,3 +10,8 @@ spring:
     properties:
       sasl.mechanism: PLAIN
       sasl.jaas.config: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="${KAFKA_USERNAME:${spring.application.name}}" password="${KAFKA_PASSWORD:${ticketrush.kafka.password:}}";'
+    listener:
+      # A consumer refused by the broker (its ACLs not in place yet: kafka-init still running after the
+      # broker was installed or recreated) tries again every 10 s. Without this it stops for good, and the
+      # service stays up but never reads Kafka again.
+      auth-exception-retry-interval: 10s

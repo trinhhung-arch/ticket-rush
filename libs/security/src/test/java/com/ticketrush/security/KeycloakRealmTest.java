@@ -33,7 +33,7 @@ class KeycloakRealmTest {
     private static final String PASSWORD = "realm-test-password";
 
     @Container
-    static final GenericContainer<?> keycloak = new GenericContainer<>("quay.io/keycloak/keycloak:26.7.4")
+    static final GenericContainer<?> keycloak = new GenericContainer<>("quay.io/keycloak/keycloak:26.7.5")
             .withCommand("start-dev", "--import-realm")
             .withEnv("KC_HEALTH_ENABLED", "true")
             .withEnv("DEMO_USER_PASSWORD", PASSWORD)
