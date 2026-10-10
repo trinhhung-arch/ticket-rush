@@ -14,13 +14,13 @@ public class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
     PostgreSQLContainer postgres() {
-        return new PostgreSQLContainer("postgres:17-alpine");
+        return new PostgreSQLContainer("postgres:17.11-alpine3.24");
     }
 
     @Bean
     @ServiceConnection
     KafkaContainer kafka() {
-        return new KafkaContainer("apache/kafka:4.1.0");
+        return new KafkaContainer("apache/kafka:4.2.2");
     }
 
     /** The test broker has no SASL, whatever a developer's .env asks for (see ticketrush-messaging.yml). */

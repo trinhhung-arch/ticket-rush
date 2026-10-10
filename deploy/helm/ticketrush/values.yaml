@@ -140,15 +140,15 @@ networkPolicy:
 infrastructure:
   enabled: true
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine3.24
     storage: 2Gi
   redis:
-    image: redis:8-alpine
+    image: redis:8.8.3-alpine
   kafka:
-    image: apache/kafka:4.1.0
+    image: apache/kafka:4.2.2
     storage: 2Gi
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.4
+    image: quay.io/keycloak/keycloak:26.7.5
     nodePort: 30180
   mailpit:
     image: axllent/mailpit:v1.31.4

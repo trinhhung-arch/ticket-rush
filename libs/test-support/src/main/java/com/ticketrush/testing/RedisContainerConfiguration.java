@@ -12,6 +12,6 @@ public class RedisContainerConfiguration {
     @Bean
     @ServiceConnection(name = "redis")
     GenericContainer<?> redis() {
-        return new GenericContainer<>("redis:8-alpine").withExposedPorts(6379);
+        return new GenericContainer<>("redis:8.8.3-alpine").withExposedPorts(6379);
     }
 }

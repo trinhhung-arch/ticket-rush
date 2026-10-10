@@ -1,0 +1,11 @@
+# Trivy (CI scan-image.sh) skips the findings listed here. Each one names where it applies, why it does
+# not affect TicketRush, and when to look at it again; nothing is ignored across the board.
+vulnerabilities:
+  - id: CVE-2025-68121
+    paths:
+      - usr/local/bin/gosu
+    statement: >-
+      crypto/tls in the Go runtime that gosu is built with. Every official Postgres image (17 and 18, Alpine
+      and Debian) ships this gosu. gosu only switches the entrypoint from root to the postgres user and
+      never opens a TLS connection; on Kubernetes the pod already runs as uid 70, so gosu is not even called.
+    expired_at: 2027-01-10

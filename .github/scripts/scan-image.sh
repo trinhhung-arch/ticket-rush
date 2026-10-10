@@ -7,8 +7,12 @@ image=$1
 dir=$(mktemp -d)
 report=$dir/report.json
 
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache "$TRIVY_IMAGE" \
-  image --quiet --scanners vuln --severity HIGH,CRITICAL --format json "$image" > "$report"
+# Findings that do not apply, each with its reason and expiry (.trivyignore.yaml at the repository root).
+ignore=$(git rev-parse --show-toplevel)/.trivyignore.yaml
+
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache \
+  -v "$ignore:/trivyignore.yaml:ro" "$TRIVY_IMAGE" \
+  image --quiet --scanners vuln --severity HIGH,CRITICAL --ignorefile /trivyignore.yaml --format json "$image" > "$report"
 
 fixable=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL" and (.FixedVersion // "") != "")] | length' "$report")
 {

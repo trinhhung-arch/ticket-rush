@@ -248,7 +248,7 @@ CI (`.github/workflows/ci.yml`) chạy song song gitleaks trên toàn bộ lịc
 | Trivy config (job Helm chart) | Template Helm và Dockerfile | Cấu hình sai từ High trở lên | Job summary, code scanning |
 | kubescape (job Helm chart) | Chart đã render, theo khung NSA và MITRE | Control High không đạt | Job summary |
 
-Hiện các công cụ chỉ báo cáo (`SECURITY_GATE: report` trong `ci.yml`): phát hiện vượt ngưỡng hiện thành cảnh báo trên PR, còn job vẫn xanh. Sau khi lọc xong cảnh báo sai thì đổi thành `enforce` để job đỏ. Nếu chính công cụ quét bị lỗi thì job luôn đỏ ([gate.sh](.github/scripts/gate.sh)). Lỗ hổng không áp dụng cho TicketRush được bỏ qua trong `osv-scanner.toml`, mỗi mục ghi lý do và ngày hết hạn.
+Hiện các công cụ chỉ báo cáo (`SECURITY_GATE: report` trong `ci.yml`): phát hiện vượt ngưỡng hiện thành cảnh báo trên PR, còn job vẫn xanh. Sau khi lọc xong cảnh báo sai thì đổi thành `enforce` để job đỏ. Nếu chính công cụ quét bị lỗi thì job luôn đỏ ([gate.sh](.github/scripts/gate.sh)). Lỗ hổng không áp dụng cho TicketRush được bỏ qua trong `osv-scanner.toml` (thư viện) hoặc `.trivyignore.yaml` (image), mỗi mục ghi lý do và ngày hết hạn.
 
 JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking-service và payment-service làm build thất bại nếu
 độ phủ dòng hoặc nhánh dưới 70% (NFR-TEST-01). Hiện tại: booking 95% dòng, 79% nhánh; payment 94% dòng, 78% nhánh.
