@@ -220,6 +220,8 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 
 ## Bảo mật và độ bền
 
+Kết quả kiểm thử bảo mật, gồm từng lỗi đã tìm, cách sửa và rủi ro được chấp nhận, nằm ở [docs/security-report.md](docs/security-report.md).
+
 | Yêu cầu | Cách làm |
 |---|---|
 | Xác thực, phân quyền (FR-IAM-01, NFR-SEC-01) | Keycloak cấp JWT với `aud=ticketrush-api` và claim `roles`. Gateway từ chối sớm token không hợp lệ; mỗi service tự kiểm chữ ký, issuer, audience, hạn và vai trò. Vai trò được kiểm trước khi đọc body. |
