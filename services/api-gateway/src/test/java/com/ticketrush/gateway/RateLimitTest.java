@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,8 +55,12 @@ class RateLimitTest {
     }
 
     @Test
-    void aBurstFromOneUserIsCutAtTenPerSecondWhileOthersAreUnaffected() {
+    void aBurstFromOneUserIsCutAtTenPerSecondWhileOthersAreUnaffected() throws InterruptedException {
         String user = "user-" + UUID.randomUUID();
+        // The bucket refills on whole seconds of Redis' clock, so a burst that straddles one gets a second
+        // allowance of ten. Warm the gateway up, then start the burst just after a second begins.
+        assertThat(burst(1, "warm-up-" + UUID.randomUUID())).containsEntry(201, 1L);
+        Thread.sleep(1000 - Instant.now().toEpochMilli() % 1000);
 
         Map<Integer, Long> statuses = burst(20, user);
 
