@@ -67,10 +67,24 @@ spec:
             tcpSocket: { port: kafka }
             periodSeconds: 5
           resources:
+            # The image's default heap is 1 GiB.
             requests: { cpu: 200m, memory: 768Mi }
-          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+            limits: { cpu: "1", memory: 1536Mi }
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
           volumeMounts:
             - { name: data, mountPath: /var/lib/kafka/data }
+            # The image writes server.properties into /opt/kafka/config at start and its logs under
+            # /opt/kafka/logs; the root filesystem is read-only.
+            - { name: config, mountPath: /opt/kafka/config }
+            - { name: logs, mountPath: /opt/kafka/logs }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -127,11 +141,21 @@ spec:
           env:
             - { name: KAFKA_BOOTSTRAP, value: "kafka:9092" }
             {{- include "ticketrush.secretEnv" (dict "env" "KAFKA_ADMIN_PASSWORD" "key" "KAFKA_ADMIN_PASSWORD" "root" .) | nindent 12 }}
-          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
           volumeMounts:
             - { name: scripts, mountPath: /scripts, readOnly: true }
+            # The admin client config (mktemp) and the Kafka tools' log directory.
+            - { name: tmp, mountPath: /tmp }
+            - { name: logs, mountPath: /opt/kafka/logs }
       volumes:
         - name: scripts
           configMap:
             name: kafka-init
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
 {{- end }}

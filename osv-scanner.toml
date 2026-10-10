@@ -1,0 +1,8 @@
+# osv-scanner (CI job "Dependency scan") reads this file. A known vulnerability that does not apply to
+# TicketRush is ignored here, never silently: each entry names the advisory, says why it does not apply
+# and expires, so it is looked at again.
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# ignoreUntil = 2026-12-31
+# reason = "Only reachable through X, which TicketRush does not use"

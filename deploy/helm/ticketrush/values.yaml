@@ -13,10 +13,12 @@ publicUrls:
 # Every Java service: two instances, probes, a disruption budget and a graceful stop (NFR-AVAIL-04, 06).
 service:
   replicas: 2
-  # Defaults; a service may override them under services.<name>.resources.
+  # Defaults; a service may override them under services.<name>.resources. The CPU limit is far above the
+  # request so a busy service is rarely throttled, yet one stuck in a loop or under attack cannot take a
+  # whole node.
   resources:
     requests: { cpu: 100m, memory: 384Mi }
-    limits: { memory: 640Mi }
+    limits: { cpu: "1", memory: 640Mi }
   # Heap at 60 % of the limit leaves room for metaspace, thread stacks and Netty buffers.
   javaOptions: "-XX:MaxRAMPercentage=60"
   # Spring finishes in-flight requests for up to 30 s; the pod gets 40 s before it is killed.
@@ -61,7 +63,7 @@ services:
     # JPA, Redis, the saga's Kafka listeners and the hold API: OOM-killed at 512Mi.
     resources:
       requests: { cpu: 200m, memory: 512Mi }
-      limits: { memory: 768Mi }
+      limits: { cpu: "1", memory: 768Mi }
     env:
       DB_HOST: postgres
       DB_PORT: "5432"

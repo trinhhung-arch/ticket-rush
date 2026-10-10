@@ -47,14 +47,22 @@ spec:
             periodSeconds: 5
           resources:
             requests: { cpu: 100m, memory: 256Mi }
-          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+            limits: { cpu: "1", memory: 1Gi }
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
           volumeMounts:
             - { name: data, mountPath: /var/lib/postgresql/data }
             - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            # The socket directory and temporary files; the root filesystem is read-only.
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
       volumes:
         - name: init
           configMap:
             name: postgres-init
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -127,7 +127,9 @@ Cần thêm `kind`, `helm` và `kubectl`. Helm chart nằm ở `deploy/helm/tick
 - Mỗi service có readiness/liveness/startup probe, PodDisruptionBudget, `preStop` 5 giây và graceful shutdown.
 - Mật khẩu và khoá được **sinh ngẫu nhiên thành K8s Secret** khi cài lần đầu, và được giữ nguyên khi `helm upgrade`.
 - Postgres, Redis, Kafka, Keycloak và Mailpit cài kèm trong chart. Khi lên môi trường thật thì tắt bằng `infrastructure.enabled=false` và dùng dịch vụ managed.
-- Namespace bật Pod Security **"restricted"**: mọi pod chạy không phải root, bỏ mọi capability, seccomp `RuntimeDefault`, không mang token service account; service Java có root filesystem chỉ đọc.
+- Namespace bật Pod Security **"restricted"**: mọi pod chạy không phải root, bỏ mọi capability, seccomp `RuntimeDefault`, không mang token service account.
+- **Mọi container có root filesystem chỉ đọc**, kể cả Postgres, Redis, Kafka, Keycloak và Mailpit; chỗ cần ghi là `emptyDir`. Keycloak dựng lại server vào `lib/quarkus` khi khởi động, nên một init container chép bản build có sẵn trong image sang `emptyDir` trước.
+- **Mọi pod có CPU và memory limit.** CPU limit (1 core cho service Java, Postgres, Kafka, Keycloak; 0,5 core cho phần còn lại) cao hơn request nhiều lần nên hiếm khi bị throttle, nhưng một pod bị kẹt vòng lặp hay bị tấn công không chiếm hết CPU của node.
 - **NetworkPolicy** chặn mặc định, chỉ mở đúng đường cần (gateway tới service, service tới database/Redis/Kafka của nó). Chỉ gateway, Keycloak và giao diện Mailpit nhận kết nối từ ngoài.
 - Keycloak chạy chế độ **production** (`start`) trên database riêng, không có admin console; Kafka đòi đăng nhập với ACL theo service, như trong compose (ADR 0009).
 - Gateway ở http://localhost:28080, Keycloak ở :28180, Mailpit ở :28025. Smoke test chạy được nguyên trên cụm này (lệnh in ra cuối `up.sh`).
@@ -237,6 +239,20 @@ Thiếu token hoặc token sai thì 401, sai vai trò thì 403. Mọi lỗi tr�
 
 Integration test chạy với Postgres, Kafka, Redis, Mailpit và Keycloak thật qua Testcontainers.
 CI (`.github/workflows/ci.yml`) chạy song song gitleaks trên toàn bộ lịch sử Git, `helm lint` và `./mvnw verify`, rồi build image của 7 service (push lên GHCR khi merge vào main).
+
+### Quét bảo mật trong CI
+
+| Công cụ | Quét gì | Ngưỡng tính là phát hiện | Kết quả ở đâu |
+|---|---|---|---|
+| CodeQL (`codeql.yml`, mỗi PR và mỗi thứ Hai) | Code Java (injection, deserialization, SSRF…) và các workflow (script injection, quyền quá rộng) | Cảnh báo High | Code scanning, check "CodeQL" trên PR |
+| osv-scanner (job Dependency scan) | Thư viện đi vào bản build, lấy từ SBOM CycloneDX mà Maven sinh ra (bỏ test scope và `test-support`) | CVSS từ 7 trở lên, hoặc chưa rõ mức độ | Job summary; SBOM tải về được ở artifact `sbom` |
+| Trivy image (job Image, Infrastructure images) | Gói hệ điều hành và jar trong 7 image, và các image hạ tầng mà chart triển khai | CVE Critical đã có bản vá | Job summary |
+| Trivy config (job Helm chart) | Template Helm và Dockerfile | Cấu hình sai từ High trở lên | Job summary, code scanning |
+| kubescape (job Helm chart) | Chart đã render, theo khung NSA và MITRE | Control High không đạt | Job summary |
+
+kubescape chỉ được nới đúng một chỗ: control C-0012 tìm mật khẩu theo tên biến môi trường, và cho phép `JWT_ISSUER`, `JWT_JWK_SET_URI` vì đó là URL công khai của Keycloak; mọi input mặc định khác giữ nguyên.
+
+Hiện các công cụ chỉ báo cáo (`SECURITY_GATE: report` trong `ci.yml`): phát hiện vượt ngưỡng hiện thành cảnh báo trên PR, còn job vẫn xanh. Sau khi lọc xong cảnh báo sai thì đổi thành `enforce` để job đỏ. Nếu chính công cụ quét bị lỗi thì job luôn đỏ ([gate.sh](.github/scripts/gate.sh)). Lỗ hổng không áp dụng cho TicketRush được bỏ qua trong `osv-scanner.toml`, mỗi mục ghi lý do và ngày hết hạn.
 
 JaCoCo đo độ phủ mọi module (`*/target/site/jacoco/index.html`); booking-service và payment-service làm build thất bại nếu
 độ phủ dòng hoặc nhánh dưới 70% (NFR-TEST-01). Hiện tại: booking 95% dòng, 79% nhánh; payment 94% dòng, 78% nhánh.
