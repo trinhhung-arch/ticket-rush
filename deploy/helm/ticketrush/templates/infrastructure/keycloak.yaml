@@ -27,8 +27,20 @@ spec:
       labels:
         {{- include "ticketrush.selector" $ctx | nindent 8 }}
     spec:
-      # The image's user is 1000 in group 0, which owns /opt/keycloak (start rebuilds it on first run).
-      {{- include "ticketrush.podSecurity" (dict "uid" 1000 "gid" 0) | nindent 6 }}
+      # The image's user 1000 owns /opt/keycloak, which every user can read, so the root group is not needed.
+      {{- include "ticketrush.podSecurity" (dict "uid" 1000 "gid" 1000) | nindent 6 }}
+      # The read-only root filesystem keeps start from re-augmenting the server into lib/quarkus, so that
+      # directory is an emptyDir seeded with the image's own build output first.
+      initContainers:
+        - name: seed-build
+          image: {{ .Values.infrastructure.keycloak.image }}
+          command: ["cp", "-R", "/opt/keycloak/lib/quarkus/.", "/build/"]
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 64Mi }
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
+          volumeMounts:
+            - { name: build, mountPath: /build }
       containers:
         - name: keycloak
           image: {{ .Values.infrastructure.keycloak.image }}
@@ -55,19 +67,31 @@ spec:
             - { name: KC_FEATURES_DISABLED, value: admin }
             {{- include "ticketrush.secretEnv" (dict "env" "KC_BOOTSTRAP_ADMIN_PASSWORD" "key" "KEYCLOAK_ADMIN_PASSWORD" "root" .) | nindent 12 }}
             {{- include "ticketrush.secretEnv" (dict "env" "DEMO_USER_PASSWORD" "key" "DEMO_USER_PASSWORD" "root" .) | nindent 12 }}
-          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
           readinessProbe:
             httpGet: { path: /health/ready, port: management }
             periodSeconds: 5
             failureThreshold: 60
           resources:
             requests: { cpu: 200m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1536Mi }
           volumeMounts:
             - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
+            # start re-augments the server for this configuration into lib/quarkus (seeded above), and
+            # keeps temporary files under data.
+            - { name: build, mountPath: /opt/keycloak/lib/quarkus }
+            - { name: data, mountPath: /opt/keycloak/data }
+            - { name: tmp, mountPath: /tmp }
       volumes:
         - name: realm
           configMap:
             name: keycloak-realm
+        - name: build
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

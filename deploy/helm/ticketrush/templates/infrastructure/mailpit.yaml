@@ -26,7 +26,13 @@ spec:
             - { name: http, containerPort: 8025 }
           resources:
             requests: { cpu: 20m, memory: 32Mi }
-          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+            limits: { cpu: 500m, memory: 128Mi }
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

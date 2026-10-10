@@ -36,7 +36,14 @@ spec:
             periodSeconds: 5
           resources:
             requests: { cpu: 50m, memory: 64Mi }
-          {{- include "ticketrush.containerSecurity" dict | nindent 10 }}
+            limits: { cpu: 500m, memory: 256Mi }
+          {{- include "ticketrush.containerSecurity" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
+          volumeMounts:
+            # Where Redis writes its snapshots; the root filesystem is read-only.
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
